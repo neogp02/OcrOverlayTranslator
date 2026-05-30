@@ -256,7 +256,7 @@ public class OverlayOcrService extends Service {
 
             if (r == null || s.length() < 2) continue;
             if (!containsJpOrZh(s)) continue;
-            if (r.width() < 18 || r.height() < 14) continue;
+            if (r.width() < 30 || r.height() < 20) continue;
 
             count++;
             if (count >= 1) return true;
@@ -281,12 +281,12 @@ public class OverlayOcrService extends Service {
 
             if (r == null || src.length() < 2) continue;
             if (!containsJpOrZh(src)) continue;
-            if (r.width() < 18 || r.height() < 14) continue;
+            if (r.width() < 30 || r.height() < 20) continue;
 
             translateAndAdd(r, src, lang);
             count++;
 
-            if (count >= 10) break;
+            if (count >= 5) break;
         }
 
         if (count == 0) {
@@ -342,22 +342,63 @@ public class OverlayOcrService extends Service {
     private void addTextBox(Rect r, String text) {
         TextView tv = new TextView(this);
         tv.setText(text);
-        tv.setTextSize(14);
+        tv.setTextSize(13);
         tv.setTextColor(Color.WHITE);
+        tv.setBackgroundColor(0xEE000000);
+        tv.setPadding(10, 6, 10, 6);
+        tv.setMaxLines(5);
 
-        // 원본 글자가 거의 안 보이게 진한 반투명 배경
-        tv.setBackgroundColor(0xE6000000);
-        tv.setPadding(8, 4, 8, 4);
-        tv.setMaxLines(4);
+        int boxW = Math.max(150, r.width() + 60);
+        int boxH = Math.max(46, r.height() + 24);
 
-        FrameLayout.LayoutParams fp = new FrameLayout.LayoutParams(
-                Math.max(120, r.width() + 30),
-                Math.max(r.height() + 8, 36)
-        );
+        // 세로글자/좁은 말풍선 보정
+        if (r.height() > r.width() * 1.5f) {
+            boxW = Math.max(130, r.width() + 90);
+            boxH = Math.max(90, r.height() + 20);
+            tv.setTextSize(12);
+        }
 
-        // 원문 바로 위에 덮어쓰기
-        fp.leftMargin = Math.max(0, r.left - 4);
-        fp.topMargin = Math.max(0, r.top - 4);
+        FrameLayout.LayoutParams fp = new FrameLayout.LayoutParams(boxW, boxH);
+
+        int x = Math.max(0, r.left - 8);
+        int y = Math.max(0, r.top - 8);
+
+        // 기존 박스와 겹치면 아래로 밀기
+        int maxTry = 8;
+        for (int i = 0; i < maxTry; i++) {
+            boolean overlap = false;
+
+            for (int j = 0; j < overlay.getChildCount(); j++) {
+                View child = overlay.getChildAt(j);
+                FrameLayout.LayoutParams cp = (FrameLayout.LayoutParams) child.getLayoutParams();
+
+                Rect a = new Rect(x, y, x + boxW, y + boxH);
+                Rect b = new Rect(cp.leftMargin, cp.topMargin,
+                        cp.leftMargin + child.getWidth() + 20,
+                        cp.topMargin + child.getHeight() + 20);
+
+                if (Rect.intersects(a, b)) {
+                    overlap = true;
+                    break;
+                }
+            }
+
+            if (!overlap) break;
+            y += boxH + 8;
+        }
+
+        DisplayMetrics dm = getResources().getDisplayMetrics();
+
+        if (x + boxW > dm.widthPixels) {
+            x = Math.max(0, dm.widthPixels - boxW - 8);
+        }
+
+        if (y + boxH > dm.heightPixels) {
+            y = Math.max(0, r.top - boxH - 8);
+        }
+
+        fp.leftMargin = x;
+        fp.topMargin = y;
 
         overlay.addView(tv, fp);
     }
