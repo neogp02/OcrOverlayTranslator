@@ -87,12 +87,21 @@ public class OverlayOcrService extends Service {
                             .build()
             );
 
-            jpTranslator.downloadModelIfNeeded();
-            zhTranslator.downloadModelIfNeeded();
-
             startForeground(1, makeNotification());
             createOverlay();
-            startCapture();
+
+            showStatus("번역 모델 다운로드 중...");
+
+            jpTranslator.downloadModelIfNeeded()
+                    .addOnSuccessListener(a ->
+                            zhTranslator.downloadModelIfNeeded()
+                                    .addOnSuccessListener(b -> {
+                                        showStatus("번역 모델 준비 완료");
+                                        startCapture();
+                                    })
+                                    .addOnFailureListener(e -> showStatus("중국어 모델 실패: " + e.getMessage()))
+                    )
+                    .addOnFailureListener(e -> showStatus("일본어 모델 실패: " + e.getMessage()));
 
         } catch (Throwable e) {
             e.printStackTrace();
@@ -476,7 +485,7 @@ private boolean containsJpOrZh(String s) {
                     cache.put(cacheKey, debugOut);
                     addTextBox(r, debugOut);
                 })
-                .addOnFailureListener(e -> addTextBox(r, src));
+                .addOnFailureListener(e -> addTextBox(r, "[OCR]\\n" + src + "\\n[번역실패]\\n" + e.getMessage()));
     }
 
     private void addTextBox(Rect r, String text) {
