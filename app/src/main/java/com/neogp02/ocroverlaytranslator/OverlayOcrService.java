@@ -312,6 +312,9 @@ public class OverlayOcrService extends Service {
             if (compact.length() < 3) continue;
 
             if (!containsJpOrZh(src)) continue;
+
+            String onlyNoise = src.replace("\\n", "").replace(" ", "").replace("　", "");
+            if (onlyNoise.matches("[0-9０-９一二三四五六七八九十]+")) continue;
             if (src.matches("[0-9!?！？♡☆★・…\\s]+")) continue;
             if (r.width() < 18 || r.height() < 18) continue;
 
@@ -487,7 +490,7 @@ private boolean containsJpOrZh(String s) {
                     String out = ko == null ? src : ko.trim();
                     if (out.length() == 0) out = src;
 
-                    String debugOut = "[OCR]\n" + src + "\n[번역]\n" + out;
+                    String debugOut = "[번역]\n" + out + "\n[OCR]\n" + src;
 
                     cache.put(cacheKey, debugOut);
                     addTextBox(r, debugOut);
@@ -498,7 +501,7 @@ private boolean containsJpOrZh(String s) {
     private void addTextBox(Rect r, String text) {
         TextView tv = new TextView(this);
         tv.setText(text);
-        tv.setTextSize(11);
+        tv.setTextSize(10);
         tv.setTextColor(Color.WHITE);
         tv.setBackgroundColor(0xEE000000);
         tv.setPadding(10, 6, 10, 6);
@@ -511,7 +514,7 @@ private boolean containsJpOrZh(String s) {
         if (r.height() > r.width() * 1.5f) {
             boxW = Math.max(130, r.width() + 90);
             boxH = Math.max(90, r.height() + 20);
-            tv.setTextSize(11);
+            tv.setTextSize(10);
         }
 
         FrameLayout.LayoutParams fp = new FrameLayout.LayoutParams(boxW, boxH);
