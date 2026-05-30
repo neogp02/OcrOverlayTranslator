@@ -3,8 +3,6 @@ package com.neogp02.ocroverlaytranslator;
 import android.app.*;
 import android.content.*;
 import android.graphics.*;
-import android.graphics.ColorMatrix;
-import android.graphics.ColorMatrixColorFilter;
 import android.hardware.display.DisplayManager;
 import android.media.Image;
 import android.media.ImageReader;
@@ -14,12 +12,18 @@ import android.os.*;
 import android.util.DisplayMetrics;
 import android.view.*;
 import android.widget.*;
+
+import com.google.mlkit.nl.translate.*;
 import com.google.mlkit.vision.common.InputImage;
 import com.google.mlkit.vision.text.Text;
 import com.google.mlkit.vision.text.TextRecognition;
 import com.google.mlkit.vision.text.TextRecognizer;
 import com.google.mlkit.vision.text.japanese.JapaneseTextRecognizerOptions;
+import com.google.mlkit.vision.text.chinese.ChineseTextRecognizerOptions;
+
 import java.nio.ByteBuffer;
+import java.util.HashMap;
+import java.util.Map;
 
 public class OverlayOcrService extends Service {
     public static int resultCode;
@@ -30,8 +34,14 @@ public class OverlayOcrService extends Service {
     private MediaProjection projection;
     private ImageReader reader;
     private Handler handler;
-    private TextRecognizer recognizer;
-    private String lastText = "";
+
+    private TextRecognizer jpRecognizer;
+    private TextRecognizer zhRecognizer;
+    private Translator jpTranslator;
+    private Translator zhTranslator;
+
+    private final Map<String, String> cache = new HashMap<>();
+    private String lastKey = "";
 
     @Override
     public void onCreate() {
@@ -39,13 +49,36 @@ public class OverlayOcrService extends Service {
 
         try {
             handler = new Handler(Looper.getMainLooper());
-            recognizer = TextRecognition.getClient(
+
+            jpRecognizer = TextRecognition.getClient(
                     new JapaneseTextRecognizerOptions.Builder().build()
             );
+
+            zhRecognizer = TextRecognition.getClient(
+                    new ChineseTextRecognizerOptions.Builder().build()
+            );
+
+            jpTranslator = Translation.getClient(
+                    new TranslatorOptions.Builder()
+                            .setSourceLanguage(TranslateLanguage.JAPANESE)
+                            .setTargetLanguage(TranslateLanguage.KOREAN)
+                            .build()
+            );
+
+            zhTranslator = Translation.getClient(
+                    new TranslatorOptions.Builder()
+                            .setSourceLanguage(TranslateLanguage.CHINESE)
+                            .setTargetLanguage(TranslateLanguage.KOREAN)
+                            .build()
+            );
+
+            jpTranslator.downloadModelIfNeeded();
+            zhTranslator.downloadModelIfNeeded();
 
             startForeground(1, makeNotification());
             createOverlay();
             startCapture();
+
         } catch (Throwable e) {
             e.printStackTrace();
             stopSelf();
@@ -62,7 +95,7 @@ public class OverlayOcrService extends Service {
 
         return new Notification.Builder(this, "ocr")
                 .setContentTitle("OCR Overlay Translator 실행 중")
-                .setContentText("OCR 원문 표시 테스트")
+                .setContentText("일본어/중국어 번역 오버레이")
                 .setSmallIcon(android.R.drawable.ic_menu_view)
                 .build();
     }
@@ -78,20 +111,20 @@ public class OverlayOcrService extends Service {
                 WindowManager.LayoutParams.MATCH_PARENT,
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE |
-                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE |
-                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                        WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE |
+                        WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
                 PixelFormat.TRANSLUCENT
         );
 
         wm.addView(overlay, lp);
-        addStatusBox("OCR 준비 중...");
+        showStatus("번역 모델 준비 중...");
     }
 
-    private void addStatusBox(String text) {
+    private void showStatus(String msg) {
         overlay.removeAllViews();
 
         TextView tv = new TextView(this);
-        tv.setText(text);
+        tv.setText(msg);
         tv.setTextSize(16);
         tv.setTextColor(Color.WHITE);
         tv.setBackgroundColor(0xCC000000);
@@ -103,13 +136,12 @@ public class OverlayOcrService extends Service {
         );
         fp.leftMargin = 20;
         fp.topMargin = 100;
-
         overlay.addView(tv, fp);
     }
 
     private void startCapture() {
         if (resultData == null) {
-            addStatusBox("MediaProjection data 없음");
+            showStatus("MediaProjection data 없음");
             return;
         }
 
@@ -119,7 +151,7 @@ public class OverlayOcrService extends Service {
         projection = mpm.getMediaProjection(resultCode, resultData);
 
         if (projection == null) {
-            addStatusBox("화면캡처 권한 실패");
+            showStatus("화면캡처 권한 실패");
             return;
         }
 
@@ -127,7 +159,7 @@ public class OverlayOcrService extends Service {
             @Override
             public void onStop() {
                 try {
-                    addStatusBox("화면캡처 중지됨");
+                    showStatus("화면캡처 중지됨");
                 } catch (Throwable ignored) {}
             }
         }, handler);
@@ -149,8 +181,7 @@ public class OverlayOcrService extends Service {
                 null
         );
 
-        addStatusBox("화면캡처 권한 OK / OCR 시작");
-
+        showStatus("OCR 번역 시작");
         handler.postDelayed(loop, 1200);
     }
 
@@ -190,74 +221,55 @@ public class OverlayOcrService extends Service {
                 bitmap = Bitmap.createBitmap(bitmap, 0, 0, width, height);
             }
 
-            Bitmap processed = preprocessForOcr(bitmap);
+            InputImage input = InputImage.fromBitmap(bitmap, 0);
 
-            InputImage input = InputImage.fromBitmap(processed, 0);
-
-            recognizer.process(input)
-                    .addOnSuccessListener(this::showOcrResult)
-                    .addOnFailureListener(e -> addStatusBox("OCR 실패: " + e.getMessage()));
+            jpRecognizer.process(input)
+                    .addOnSuccessListener(jp -> {
+                        if (hasUsefulBlocks(jp)) {
+                            handleText(jp, "jp");
+                        } else {
+                            zhRecognizer.process(input)
+                                    .addOnSuccessListener(zh -> handleText(zh, "zh"))
+                                    .addOnFailureListener(e -> {});
+                        }
+                    })
+                    .addOnFailureListener(e -> {
+                        zhRecognizer.process(input)
+                                .addOnSuccessListener(zh -> handleText(zh, "zh"))
+                                .addOnFailureListener(e2 -> {});
+                    });
 
         } catch (Throwable e) {
-            addStatusBox("캡처/OCR 예외: " + e.getClass().getSimpleName());
+            showStatus("OCR 예외: " + e.getClass().getSimpleName());
         } finally {
             image.close();
         }
     }
 
+    private boolean hasUsefulBlocks(Text text) {
+        if (text == null || text.getTextBlocks() == null) return false;
 
-    private Bitmap preprocessForOcr(Bitmap src) {
-        try {
-            int scale = 2;
-            Bitmap scaled = Bitmap.createScaledBitmap(
-                    src,
-                    src.getWidth() * scale,
-                    src.getHeight() * scale,
-                    true
-            );
+        int count = 0;
+        for (Text.TextBlock b : text.getTextBlocks()) {
+            String s = cleanSource(b.getText());
+            Rect r = b.getBoundingBox();
 
-            Bitmap out = Bitmap.createBitmap(
-                    scaled.getWidth(),
-                    scaled.getHeight(),
-                    Bitmap.Config.ARGB_8888
-            );
+            if (r == null || s.length() < 2) continue;
+            if (!containsJpOrZh(s)) continue;
+            if (r.width() < 18 || r.height() < 14) continue;
 
-            Canvas canvas = new Canvas(out);
-            Paint paint = new Paint();
-
-            ColorMatrix cm = new ColorMatrix();
-            cm.setSaturation(0);
-
-            ColorMatrix contrast = new ColorMatrix(new float[] {
-                    1.8f, 0, 0, 0, -80,
-                    0, 1.8f, 0, 0, -80,
-                    0, 0, 1.8f, 0, -80,
-                    0, 0, 0, 1, 0
-            });
-
-            cm.postConcat(contrast);
-            paint.setColorFilter(new ColorMatrixColorFilter(cm));
-
-            canvas.drawBitmap(scaled, 0, 0, paint);
-
-            return out;
-        } catch (Throwable e) {
-            return src;
+            count++;
+            if (count >= 1) return true;
         }
+        return false;
     }
 
-    private void showOcrResult(Text result) {
-        String text = result.getText();
+    private void handleText(Text result, String lang) {
+        if (result == null) return;
 
-        if (text == null || text.trim().isEmpty()) {
-            addStatusBox("OCR 결과 없음");
-            return;
-        }
-
-        text = text.trim();
-
-        if (text.equals(lastText)) return;
-        lastText = text;
+        String key = lang + ":" + result.getText();
+        if (key.equals(lastKey)) return;
+        lastKey = key;
 
         overlay.removeAllViews();
 
@@ -265,36 +277,87 @@ public class OverlayOcrService extends Service {
 
         for (Text.TextBlock block : result.getTextBlocks()) {
             Rect r = block.getBoundingBox();
-            String src = block.getText();
+            String src = cleanSource(block.getText());
 
-            if (r == null || src == null || src.trim().length() < 2) continue;
+            if (r == null || src.length() < 2) continue;
+            if (!containsJpOrZh(src)) continue;
+            if (r.width() < 18 || r.height() < 14) continue;
 
-            addTextBox(r, src.trim());
+            translateAndAdd(r, src, lang);
             count++;
 
-            if (count >= 8) break;
+            if (count >= 10) break;
         }
 
         if (count == 0) {
-            addStatusBox("OCR 블록 없음");
+            // 결과 없을 때는 화면을 덮지 않음
+            overlay.removeAllViews();
         }
+    }
+
+    private String cleanSource(String s) {
+        if (s == null) return "";
+        return s
+                .replace("|", "")
+                .replace("｜", "")
+                .replace("\n\n", "\n")
+                .trim();
+    }
+
+    private boolean containsJpOrZh(String s) {
+        if (s == null) return false;
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+
+            // Hiragana, Katakana, CJK Unified Ideographs
+            if ((c >= 0x3040 && c <= 0x30FF) ||
+                    (c >= 0x3400 && c <= 0x9FFF)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void translateAndAdd(Rect r, String src, String lang) {
+        String cacheKey = lang + ":" + src;
+
+        if (cache.containsKey(cacheKey)) {
+            addTextBox(r, cache.get(cacheKey));
+            return;
+        }
+
+        Translator t = lang.equals("zh") ? zhTranslator : jpTranslator;
+
+        t.translate(src)
+                .addOnSuccessListener(ko -> {
+                    String out = ko == null ? src : ko.trim();
+                    if (out.length() == 0) out = src;
+
+                    cache.put(cacheKey, out);
+                    addTextBox(r, out);
+                })
+                .addOnFailureListener(e -> addTextBox(r, src));
     }
 
     private void addTextBox(Rect r, String text) {
         TextView tv = new TextView(this);
         tv.setText(text);
-        tv.setTextSize(15);
+        tv.setTextSize(14);
         tv.setTextColor(Color.WHITE);
-        tv.setBackgroundColor(0xCC000000);
+
+        // 원본 글자가 거의 안 보이게 진한 반투명 배경
+        tv.setBackgroundColor(0xE6000000);
         tv.setPadding(8, 4, 8, 4);
+        tv.setMaxLines(4);
 
         FrameLayout.LayoutParams fp = new FrameLayout.LayoutParams(
-                Math.max(120, r.width() + 40),
-                FrameLayout.LayoutParams.WRAP_CONTENT
+                Math.max(120, r.width() + 30),
+                Math.max(r.height() + 8, 36)
         );
 
-        fp.leftMargin = Math.max(0, r.left);
-        fp.topMargin = Math.max(0, r.top);
+        // 원문 바로 위에 덮어쓰기
+        fp.leftMargin = Math.max(0, r.left - 4);
+        fp.topMargin = Math.max(0, r.top - 4);
 
         overlay.addView(tv, fp);
     }
@@ -305,7 +368,11 @@ public class OverlayOcrService extends Service {
             if (handler != null) handler.removeCallbacksAndMessages(null);
             if (overlay != null && wm != null) wm.removeView(overlay);
             if (projection != null) projection.stop();
-            if (recognizer != null) recognizer.close();
+
+            if (jpRecognizer != null) jpRecognizer.close();
+            if (zhRecognizer != null) zhRecognizer.close();
+            if (jpTranslator != null) jpTranslator.close();
+            if (zhTranslator != null) zhTranslator.close();
         } catch (Throwable ignored) {}
 
         super.onDestroy();
