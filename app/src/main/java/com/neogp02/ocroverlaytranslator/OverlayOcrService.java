@@ -236,7 +236,14 @@ public class OverlayOcrService extends Service {
                 bitmap = Bitmap.createBitmap(bitmap, 0, 0, width, height);
             }
 
-            InputImage input = InputImage.fromBitmap(bitmap, 0);
+            Bitmap ocrBitmap = Bitmap.createScaledBitmap(
+                    bitmap,
+                    bitmap.getWidth() * 2,
+                    bitmap.getHeight() * 2,
+                    true
+            );
+
+            InputImage input = InputImage.fromBitmap(ocrBitmap, 0);
 
             jpRecognizer.process(input)
                     .addOnSuccessListener(jp -> {
@@ -295,7 +302,8 @@ public class OverlayOcrService extends Service {
             if (src.matches("[0-9!?！？♡☆★・…\\s]+")) continue;
             if (r.width() < 18 || r.height() < 18) continue;
 
-            items.add(new OcrItem(new Rect(r), src));
+            Rect rr = new Rect(r.left / 2, r.top / 2, r.right / 2, r.bottom / 2);
+            items.add(new OcrItem(rr, src));
         }
 
         if (items.size() == 0) {
@@ -463,8 +471,10 @@ private boolean containsJpOrZh(String s) {
                     String out = ko == null ? src : ko.trim();
                     if (out.length() == 0) out = src;
 
-                    cache.put(cacheKey, out);
-                    addTextBox(r, out);
+                    String debugOut = "[OCR]\n" + src + "\n[번역]\n" + out;
+
+                    cache.put(cacheKey, debugOut);
+                    addTextBox(r, debugOut);
                 })
                 .addOnFailureListener(e -> addTextBox(r, src));
     }
@@ -472,7 +482,7 @@ private boolean containsJpOrZh(String s) {
     private void addTextBox(Rect r, String text) {
         TextView tv = new TextView(this);
         tv.setText(text);
-        tv.setTextSize(13);
+        tv.setTextSize(12);
         tv.setTextColor(Color.WHITE);
         tv.setBackgroundColor(0xEE000000);
         tv.setPadding(10, 6, 10, 6);
