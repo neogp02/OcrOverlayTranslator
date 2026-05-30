@@ -280,105 +280,161 @@ public class OverlayOcrService extends Service {
     }
 
     
+    
     private void handleText(Text result, String lang) {
-        if(result==null) return;
+        if (result == null) return;
+
+        ArrayList<OcrItem> items = new ArrayList<>();
+
+        for (Text.TextBlock block : result.getTextBlocks()) {
+            Rect r = block.getBoundingBox();
+            String src = cleanSource(block.getText());
+
+            if (r == null || src.length() < 2) continue;
+            if (!containsJpOrZh(src)) continue;
+            if (src.matches("[0-9!?！？♡☆★・…\\s]+")) continue;
+            if (r.width() < 18 || r.height() < 18) continue;
+
+            items.add(new OcrItem(new Rect(r), src));
+        }
+
+        if (items.size() == 0) {
+            overlay.removeAllViews();
+            placedBoxes.clear();
+            return;
+        }
+
+        ArrayList<OcrItem> groups = groupOcrItems(items);
+
+        StringBuilder keyBuilder = new StringBuilder(lang);
+        for (OcrItem g : groups) keyBuilder.append("|").append(g.text);
+        String key = keyBuilder.toString();
+
+        if (key.equals(lastKey)) return;
+        lastKey = key;
 
         overlay.removeAllViews();
         placedBoxes.clear();
 
-        ArrayList<OcrItem> items = new ArrayList<>();
-
-        for(Text.TextBlock block : result.getTextBlocks()){
-
-            Rect r = block.getBoundingBox();
-            if(r==null) continue;
-
-            String src = cleanSource(block.getText());
-
-            if(src.length()<2) continue;
-
-            if(src.matches("[0-9!?！？♡☆★・…\\s]+"))
-                continue;
-
-            if(!containsJpOrZh(src))
-                continue;
-
-            if(r.width()<25 || r.height()<18)
-                continue;
-
-            items.add(new OcrItem(r,src));
-        }
-
-        ArrayList<OcrItem> merged = new ArrayList<>();
-
-        boolean[] used = new boolean[items.size()];
-
-        for(int i=0;i<items.size();i++){
-
-            if(used[i]) continue;
-
-            Rect base = new Rect(items.get(i).rect);
-            StringBuilder sb = new StringBuilder(items.get(i).text);
-
-            used[i]=true;
-
-            for(int j=i+1;j<items.size();j++){
-
-                if(used[j]) continue;
-
-                Rect r2 = items.get(j).rect;
-
-                int dx = Math.abs(base.centerX()-r2.centerX());
-                int dy = Math.abs(base.centerY()-r2.centerY());
-
-                if(dx<120 && dy<180){
-
-                    sb.append("\n");
-                    sb.append(items.get(j).text);
-
-                    base.union(r2);
-
-                    used[j]=true;
-                }
-            }
-
-            merged.add(new OcrItem(base,sb.toString()));
-        }
-
-        merged.sort((a,b)->{
-            return Integer.compare(
-                    a.rect.top,
-                    b.rect.top
-            );
-        });
-
-        int count=0;
-
-        for(OcrItem item : merged){
-
-            translateAndAdd(
-                    item.rect,
-                    item.text,
-                    lang
-            );
-
+        int count = 0;
+        for (OcrItem g : groups) {
+            if (g.text.length() < 2) continue;
+            translateAndAdd(g.rect, g.text, lang);
             count++;
-
-            if(count>=4)
-                break;
+            if (count >= 4) break;
         }
     }
 
-private String cleanSource(String s) {
+    private ArrayList<OcrItem> groupOcrItems(ArrayList<OcrItem> items) {
+        ArrayList<OcrItem> result = new ArrayList<>();
+        boolean[] used = new boolean[items.size()];
+
+        for (int i = 0; i < items.size(); i++) {
+            if (used[i]) continue;
+
+            Rect base = new Rect(items.get(i).rect);
+            ArrayList<OcrItem> group = new ArrayList<>();
+            group.add(items.get(i));
+            used[i] = true;
+
+            boolean changed = true;
+            while (changed) {
+                changed = false;
+
+                for (int j = 0; j < items.size(); j++) {
+                    if (used[j]) continue;
+
+                    Rect r = items.get(j).rect;
+
+                    int gapX = Math.max(0, Math.max(base.left, r.left) - Math.min(base.right, r.right));
+                    int gapY = Math.max(0, Math.max(base.top, r.top) - Math.min(base.bottom, r.bottom));
+
+                    boolean nearVerticalColumn =
+                            Math.abs(base.centerX() - r.centerX()) < 90 && gapY < 140;
+
+                    boolean nearHorizontalLine =
+                            Math.abs(base.centerY() - r.centerY()) < 70 && gapX < 160;
+
+                    boolean insideNearby =
+                            gapX < 80 && gapY < 120;
+
+                    if (nearVerticalColumn || nearHorizontalLine || insideNearby) {
+                        group.add(items.get(j));
+                        base.union(r);
+                        used[j] = true;
+                        changed = true;
+                    }
+                }
+            }
+
+            String merged = mergeGroupText(group);
+            if (merged.length() >= 2) {
+                result.add(new OcrItem(base, merged));
+            }
+        }
+
+        result.sort((a, b) -> {
+            int dy = Integer.compare(a.rect.top, b.rect.top);
+            if (dy != 0) return dy;
+            return Integer.compare(a.rect.left, b.rect.left);
+        });
+
+        return result;
+    }
+
+    private String mergeGroupText(ArrayList<OcrItem> group) {
+        if (group.size() == 0) return "";
+
+        Rect area = new Rect(group.get(0).rect);
+        for (OcrItem item : group) area.union(item.rect);
+
+        boolean vertical = area.height() > area.width() * 1.15f;
+
+        if (vertical) {
+            group.sort((a, b) -> {
+                int dx = Integer.compare(a.rect.left, b.rect.left);
+                if (Math.abs(a.rect.left - b.rect.left) > 40) return dx;
+                return Integer.compare(a.rect.top, b.rect.top);
+            });
+        } else {
+            group.sort((a, b) -> {
+                int dy = Integer.compare(a.rect.top, b.rect.top);
+                if (Math.abs(a.rect.top - b.rect.top) > 35) return dy;
+                return Integer.compare(a.rect.left, b.rect.left);
+            });
+        }
+
+        StringBuilder sb = new StringBuilder();
+        for (OcrItem item : group) {
+            String t = cleanSource(item.text);
+            if (t.length() == 0) continue;
+
+            if (vertical) {
+                sb.append(t.replace("\n", ""));
+            } else {
+                if (sb.length() > 0) sb.append("\n");
+                sb.append(t);
+            }
+        }
+
+        return sb.toString().trim();
+    }
+
+
+    private String cleanSource(String s) {
         if (s == null) return "";
         return s
                 .replace("|", "")
                 .replace("｜", "")
+                .replace("　", "")
+                .replace(" ", "")
+                .replace("...", "")
+                .replace("…", "")
                 .replace("\n\n", "\n")
                 .trim();
     }
 
-    private boolean containsJpOrZh(String s) {
+private boolean containsJpOrZh(String s) {
         if (s == null) return false;
         for (int i = 0; i < s.length(); i++) {
             char c = s.charAt(i);
