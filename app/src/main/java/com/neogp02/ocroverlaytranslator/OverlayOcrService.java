@@ -306,7 +306,11 @@ public class OverlayOcrService extends Service {
             Rect r = block.getBoundingBox();
             String src = cleanSource(block.getText());
 
-            if (r == null || src.length() < 2) continue;
+            if (r == null) continue;
+
+            String compact = src.replace("\n", "").replace(" ", "").replace("　", "").trim();
+            if (compact.length() < 3) continue;
+
             if (!containsJpOrZh(src)) continue;
             if (src.matches("[0-9!?！？♡☆★・…\\s]+")) continue;
             if (r.width() < 18 || r.height() < 18) continue;
@@ -335,7 +339,9 @@ public class OverlayOcrService extends Service {
 
         int count = 0;
         for (OcrItem g : groups) {
-            if (g.text.length() < 2) continue;
+            String compactGroup = g.text.replace("\n", "").replace(" ", "").replace("　", "").trim();
+            if (compactGroup.length() < 3) continue;
+
             translateAndAdd(g.rect, g.text, lang);
             count++;
             if (count >= 4) break;
@@ -385,7 +391,8 @@ public class OverlayOcrService extends Service {
             }
 
             String merged = mergeGroupText(group);
-            if (merged.length() >= 2) {
+            String compactMerged = merged.replace("\n", "").replace(" ", "").replace("　", "").trim();
+            if (compactMerged.length() >= 3) {
                 result.add(new OcrItem(base, merged));
             }
         }
