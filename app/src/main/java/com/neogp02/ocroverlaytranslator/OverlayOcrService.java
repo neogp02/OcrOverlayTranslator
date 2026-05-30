@@ -121,6 +121,15 @@ public class OverlayOcrService extends Service {
             return;
         }
 
+        projection.registerCallback(new MediaProjection.Callback() {
+            @Override
+            public void onStop() {
+                try {
+                    addStatusBox("화면캡처 중지됨");
+                } catch (Throwable ignored) {}
+            }
+        }, handler);
+
         DisplayMetrics dm = getResources().getDisplayMetrics();
         int w = dm.widthPixels;
         int h = dm.heightPixels;
