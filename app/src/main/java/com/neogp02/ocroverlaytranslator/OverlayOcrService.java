@@ -3,6 +3,8 @@ package com.neogp02.ocroverlaytranslator;
 import android.app.*;
 import android.content.*;
 import android.graphics.*;
+import android.graphics.ColorMatrix;
+import android.graphics.ColorMatrixColorFilter;
 import android.hardware.display.DisplayManager;
 import android.media.Image;
 import android.media.ImageReader;
@@ -188,7 +190,9 @@ public class OverlayOcrService extends Service {
                 bitmap = Bitmap.createBitmap(bitmap, 0, 0, width, height);
             }
 
-            InputImage input = InputImage.fromBitmap(bitmap, 0);
+            Bitmap processed = preprocessForOcr(bitmap);
+
+            InputImage input = InputImage.fromBitmap(processed, 0);
 
             recognizer.process(input)
                     .addOnSuccessListener(this::showOcrResult)
@@ -198,6 +202,47 @@ public class OverlayOcrService extends Service {
             addStatusBox("캡처/OCR 예외: " + e.getClass().getSimpleName());
         } finally {
             image.close();
+        }
+    }
+
+
+    private Bitmap preprocessForOcr(Bitmap src) {
+        try {
+            int scale = 2;
+            Bitmap scaled = Bitmap.createScaledBitmap(
+                    src,
+                    src.getWidth() * scale,
+                    src.getHeight() * scale,
+                    true
+            );
+
+            Bitmap out = Bitmap.createBitmap(
+                    scaled.getWidth(),
+                    scaled.getHeight(),
+                    Bitmap.Config.ARGB_8888
+            );
+
+            Canvas canvas = new Canvas(out);
+            Paint paint = new Paint();
+
+            ColorMatrix cm = new ColorMatrix();
+            cm.setSaturation(0);
+
+            ColorMatrix contrast = new ColorMatrix(new float[] {
+                    1.8f, 0, 0, 0, -80,
+                    0, 1.8f, 0, 0, -80,
+                    0, 0, 1.8f, 0, -80,
+                    0, 0, 0, 1, 0
+            });
+
+            cm.postConcat(contrast);
+            paint.setColorFilter(new ColorMatrixColorFilter(cm));
+
+            canvas.drawBitmap(scaled, 0, 0, paint);
+
+            return out;
+        } catch (Throwable e) {
+            return src;
         }
     }
 
