@@ -10,6 +10,7 @@ import android.media.projection.*;
 import android.os.*;
 import android.view.*;
 import android.widget.*;
+import android.util.DisplayMetrics;
 import com.google.mlkit.nl.translate.*;
 import com.google.mlkit.vision.common.InputImage;
 import com.google.mlkit.vision.text.*;
