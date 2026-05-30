@@ -56,6 +56,7 @@ public class OverlayOcrService extends Service {
 
     private final Map<String, String> cache = new HashMap<>();
     private String lastKey = "";
+    private final List<Rect> placedBoxes = new ArrayList<>();
 
     @Override
     public void onCreate() {
