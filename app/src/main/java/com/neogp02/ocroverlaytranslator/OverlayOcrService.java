@@ -482,7 +482,7 @@ private boolean containsJpOrZh(String s) {
     private void addTextBox(Rect r, String text) {
         TextView tv = new TextView(this);
         tv.setText(text);
-        tv.setTextSize(12);
+        tv.setTextSize(11);
         tv.setTextColor(Color.WHITE);
         tv.setBackgroundColor(0xEE000000);
         tv.setPadding(10, 6, 10, 6);
@@ -495,7 +495,7 @@ private boolean containsJpOrZh(String s) {
         if (r.height() > r.width() * 1.5f) {
             boxW = Math.max(130, r.width() + 90);
             boxH = Math.max(90, r.height() + 20);
-            tv.setTextSize(12);
+            tv.setTextSize(11);
         }
 
         FrameLayout.LayoutParams fp = new FrameLayout.LayoutParams(boxW, boxH);
