@@ -24,8 +24,22 @@ import com.google.mlkit.vision.text.chinese.ChineseTextRecognizerOptions;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.ArrayList;
+import java.util.List;
 
 public class OverlayOcrService extends Service {
+
+    static class OcrItem {
+        Rect rect;
+        String text;
+
+        OcrItem(Rect r,String t){
+            rect=r;
+            text=t;
+        }
+    }
+
+
     public static int resultCode;
     public static Intent resultData;
 
@@ -264,38 +278,97 @@ public class OverlayOcrService extends Service {
         return false;
     }
 
+    
     private void handleText(Text result, String lang) {
-        if (result == null) return;
-
-        String key = lang + ":" + result.getText();
-        if (key.equals(lastKey)) return;
-        lastKey = key;
+        if(result==null) return;
 
         overlay.removeAllViews();
+        placedBoxes.clear();
 
-        int count = 0;
+        ArrayList<OcrItem> items = new ArrayList<>();
 
-        for (Text.TextBlock block : result.getTextBlocks()) {
+        for(Text.TextBlock block : result.getTextBlocks()){
+
             Rect r = block.getBoundingBox();
+            if(r==null) continue;
+
             String src = cleanSource(block.getText());
 
-            if (r == null || src.length() < 2) continue;
-            if (!containsJpOrZh(src)) continue;
-            if (r.width() < 30 || r.height() < 20) continue;
+            if(src.length()<2) continue;
 
-            translateAndAdd(r, src, lang);
-            count++;
+            if(src.matches("[0-9!?！？♡☆★・…\\s]+"))
+                continue;
 
-            if (count >= 5) break;
+            if(!containsJpOrZh(src))
+                continue;
+
+            if(r.width()<25 || r.height()<18)
+                continue;
+
+            items.add(new OcrItem(r,src));
         }
 
-        if (count == 0) {
-            // 결과 없을 때는 화면을 덮지 않음
-            overlay.removeAllViews();
+        ArrayList<OcrItem> merged = new ArrayList<>();
+
+        boolean[] used = new boolean[items.size()];
+
+        for(int i=0;i<items.size();i++){
+
+            if(used[i]) continue;
+
+            Rect base = new Rect(items.get(i).rect);
+            StringBuilder sb = new StringBuilder(items.get(i).text);
+
+            used[i]=true;
+
+            for(int j=i+1;j<items.size();j++){
+
+                if(used[j]) continue;
+
+                Rect r2 = items.get(j).rect;
+
+                int dx = Math.abs(base.centerX()-r2.centerX());
+                int dy = Math.abs(base.centerY()-r2.centerY());
+
+                if(dx<120 && dy<180){
+
+                    sb.append("\n");
+                    sb.append(items.get(j).text);
+
+                    base.union(r2);
+
+                    used[j]=true;
+                }
+            }
+
+            merged.add(new OcrItem(base,sb.toString()));
+        }
+
+        merged.sort((a,b)->{
+            return Integer.compare(
+                    a.rect.top,
+                    b.rect.top
+            );
+        });
+
+        int count=0;
+
+        for(OcrItem item : merged){
+
+            translateAndAdd(
+                    item.rect,
+                    item.text,
+                    lang
+            );
+
+            count++;
+
+            if(count>=4)
+                break;
         }
     }
 
-    private String cleanSource(String s) {
+private String cleanSource(String s) {
         if (s == null) return "";
         return s
                 .replace("|", "")
