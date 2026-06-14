@@ -352,11 +352,11 @@ private void showStatus(String msg) {
         int index = 1;
 
         for (OcrItem item : items) {
-            addNumberMarker(item.rect, index);
-            panel.append(index)
-                    .append(". ")
-                    .append(item.text.replace("\n", " "))
-                    .append("\n");
+panel.append("[")
+                    .append(index)
+                    .append("]\\n")
+                    .append(item.text)
+                    .append("\\n\\n");
 
             index++;
             if (index > 25) break;
