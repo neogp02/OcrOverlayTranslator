@@ -139,7 +139,7 @@ public class OverlayOcrService extends Service {
                 WindowManager.LayoutParams.MATCH_PARENT,
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE |
-                        WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE |
+                        0 |
                         WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
                 PixelFormat.TRANSLUCENT
         );
@@ -324,7 +324,7 @@ public class OverlayOcrService extends Service {
 
         for (Text.TextBlock block : result.getTextBlocks()) {
             Rect r = block.getBoundingBox();
-            String text = cleanSource(block.getText());
+            String text = cleanSource(orderedBlockText(block));
 
             if (r == null) continue;
             if (text.length() < 2) continue;
@@ -389,37 +389,37 @@ public class OverlayOcrService extends Service {
     
     
     
+    
     private void addBottomPanel(String text) {
         android.widget.ScrollView scroll = new android.widget.ScrollView(this);
         scroll.setBackgroundColor(0xCC000000);
         scroll.setFillViewport(false);
-        scroll.setOverScrollMode(android.view.View.OVER_SCROLL_IF_CONTENT_SCROLLS);
+        scroll.setVerticalScrollBarEnabled(true);
+        scroll.setClickable(true);
+        scroll.setFocusable(true);
 
         TextView tv = new TextView(this);
         tv.setText(text);
         tv.setTextSize(10);
         tv.setTextColor(Color.WHITE);
-        tv.setPadding(12, 10, 12, 10);
+        tv.setPadding(12, 10, 12, 40);
         tv.setSingleLine(false);
 
-        android.view.ViewGroup.LayoutParams childLp =
-                new android.view.ViewGroup.LayoutParams(
-                        android.view.ViewGroup.LayoutParams.MATCH_PARENT,
-                        android.view.ViewGroup.LayoutParams.WRAP_CONTENT
-                );
-
-        scroll.addView(tv, childLp);
+        scroll.addView(
+                tv,
+                new android.widget.ScrollView.LayoutParams(
+                        android.widget.ScrollView.LayoutParams.MATCH_PARENT,
+                        android.widget.ScrollView.LayoutParams.WRAP_CONTENT
+                )
+        );
 
         DisplayMetrics dm = getResources().getDisplayMetrics();
 
-        int panelHeight = Math.min(260, dm.heightPixels / 4);
-        int bottomOffset = 200;
+        int panelHeight = Math.min(280, dm.heightPixels / 4);
+        int bottomOffset = 170;
 
         FrameLayout.LayoutParams fp =
-                new FrameLayout.LayoutParams(
-                        dm.widthPixels,
-                        panelHeight
-                );
+                new FrameLayout.LayoutParams(dm.widthPixels, panelHeight);
 
         fp.leftMargin = 0;
         fp.topMargin = dm.heightPixels - panelHeight - bottomOffset;
@@ -501,7 +501,39 @@ public class OverlayOcrService extends Service {
     }
 
 
-    private String cleanSource(String s) {
+    
+    private String orderedBlockText(Text.TextBlock block) {
+        ArrayList<Text.Line> lines = new ArrayList<>(block.getLines());
+
+        lines.sort((a, b) -> {
+            Rect ar = a.getBoundingBox();
+            Rect br = b.getBoundingBox();
+
+            if (ar == null || br == null) return 0;
+
+            // 세로쓰기: 오른쪽 줄 먼저
+            if (Math.abs(ar.centerX() - br.centerX()) > 25) {
+                return Integer.compare(br.centerX(), ar.centerX());
+            }
+
+            // 같은 줄이면 위에서 아래
+            return Integer.compare(ar.top, br.top);
+        });
+
+        StringBuilder sb = new StringBuilder();
+
+        for (Text.Line line : lines) {
+            String t = line.getText();
+            if (t == null) continue;
+
+            if (sb.length() > 0) sb.append(" ");
+            sb.append(t);
+        }
+
+        return sb.toString();
+    }
+
+private String cleanSource(String s) {
         if (s == null) return "";
 
         return s
