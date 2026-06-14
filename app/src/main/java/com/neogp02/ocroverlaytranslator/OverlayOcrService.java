@@ -386,20 +386,30 @@ public class OverlayOcrService extends Service {
         overlay.addView(tv, fp);
     }
 
+    
     private void addBottomPanel(String text) {
+        ScrollView scroll = new ScrollView(this);
+        scroll.setBackgroundColor(0xCC000000);
+        scroll.setFillViewport(false);
+
         TextView tv = new TextView(this);
         tv.setText(text);
         tv.setTextSize(10);
         tv.setTextColor(Color.WHITE);
-        tv.setBackgroundColor(0xCC000000);
         tv.setPadding(12, 10, 12, 10);
-        tv.setMaxLines(12);
         tv.setSingleLine(false);
+
+        scroll.addView(
+                tv,
+                new ScrollView.LayoutParams(
+                        ScrollView.LayoutParams.MATCH_PARENT,
+                        ScrollView.LayoutParams.WRAP_CONTENT
+                )
+        );
 
         DisplayMetrics dm = getResources().getDisplayMetrics();
 
-        int panelHeight = Math.min(240, dm.heightPixels / 4);
-
+        int panelHeight = Math.min(260, dm.heightPixels / 4);
         int bottomOffset = 200;
 
         FrameLayout.LayoutParams fp =
@@ -414,183 +424,9 @@ public class OverlayOcrService extends Service {
                 - panelHeight
                 - bottomOffset;
 
-        overlay.addView(tv, fp);
+        overlay.addView(scroll, fp);
     }
 
-private String cleanSource(String s) {
-        if (s == null) return "";
-        return s
-                .replace("|", "")
-                .replace("｜", "")
-                .replace("　", "")
-                .replace(" ", "")
-                .replace("...", "")
-                .replace("…", "")
-                .replace("\n\n", "\n")
-                .trim();
-    }
-
-private boolean containsJpOrZh(String s) {
-        if (s == null) return false;
-        for (int i = 0; i < s.length(); i++) {
-            char c = s.charAt(i);
-
-            // Hiragana, Katakana, CJK Unified Ideographs
-            if ((c >= 0x3040 && c <= 0x30FF) ||
-                    (c >= 0x3400 && c <= 0x9FFF)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-
-    private boolean isMostlyLatin(String s) {
-        if (s == null) return false;
-
-        int latin = 0;
-        int jpzh = 0;
-
-        for (int i = 0; i < s.length(); i++) {
-            char c = s.charAt(i);
-
-            if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')) {
-                latin++;
-            }
-
-            if ((c >= 0x3040 && c <= 0x30FF) ||
-                    (c >= 0x3400 && c <= 0x9FFF)) {
-                jpzh++;
-            }
-        }
-
-        return latin >= 3 && latin > jpzh;
-    }
-
-    
-
-    private Rect findWhiteBubbleRect(Rect textRect) {
-        if (lastScreenBitmap == null || textRect == null) return null;
-
-        int bw = lastScreenBitmap.getWidth();
-        int bh = lastScreenBitmap.getHeight();
-
-        int cx = Math.max(0, Math.min(bw - 1, textRect.centerX()));
-        int cy = Math.max(0, Math.min(bh - 1, textRect.centerY()));
-
-        int[][] seeds = new int[][] {
-                {cx, cy},
-                {textRect.left - 4, cy},
-                {textRect.right + 4, cy},
-                {cx, textRect.top - 4},
-                {cx, textRect.bottom + 4},
-                {textRect.left - 8, textRect.top - 8},
-                {textRect.right + 8, textRect.bottom + 8}
-        };
-
-        Rect best = null;
-
-        for (int[] seed : seeds) {
-            int sx = Math.max(0, Math.min(bw - 1, seed[0]));
-            int sy = Math.max(0, Math.min(bh - 1, seed[1]));
-
-            if (!isWhiteLike(sx, sy)) continue;
-
-            Rect r = floodWhiteRegion(sx, sy);
-
-            if (r == null) continue;
-
-            int area = r.width() * r.height();
-
-            // 너무 작은 영역 제외
-            if (r.width() < 25 || r.height() < 25) continue;
-
-            // 페이지 배경처럼 너무 큰 영역 제외
-            if (r.width() > bw * 0.70f || r.height() > bh * 0.55f) continue;
-            if (area > bw * bh * 0.30f) continue;
-
-            // OCR 글자 영역을 포함하지 않으면 제외
-            if (!Rect.intersects(r, textRect)) continue;
-
-            if (best == null || area > best.width() * best.height()) {
-                best = r;
-            }
-        }
-
-        if (best == null) return null;
-
-        // 말풍선 테두리 안쪽만 쓰도록 약간 축소
-        best.left = Math.max(0, best.left + 2);
-        best.top = Math.max(0, best.top + 2);
-        best.right = Math.min(bw, best.right - 2);
-        best.bottom = Math.min(bh, best.bottom - 2);
-
-        return best;
-    }
-
-    private boolean isWhiteLike(int x, int y) {
-        int c = lastScreenBitmap.getPixel(x, y);
-
-        int r = Color.red(c);
-        int g = Color.green(c);
-        int b = Color.blue(c);
-
-        int max = Math.max(r, Math.max(g, b));
-        int min = Math.min(r, Math.min(g, b));
-
-        return max > 200 && min > 170 && (max - min) < 65;
-    }
-
-    private Rect floodWhiteRegion(int sx, int sy) {
-        int bw = lastScreenBitmap.getWidth();
-        int bh = lastScreenBitmap.getHeight();
-
-        boolean[] visited = new boolean[bw * bh];
-        ArrayDeque<int[]> q = new ArrayDeque<>();
-
-        q.add(new int[]{sx, sy});
-        visited[sy * bw + sx] = true;
-
-        int minX = sx, maxX = sx, minY = sy, maxY = sy;
-        int count = 0;
-        int limit = Math.max(8000, bw * bh / 8);
-
-        while (!q.isEmpty()) {
-            int[] p = q.poll();
-            int x = p[0];
-            int y = p[1];
-
-            count++;
-            if (count > limit) return null;
-
-            if (x < minX) minX = x;
-            if (x > maxX) maxX = x;
-            if (y < minY) minY = y;
-            if (y > maxY) maxY = y;
-
-            int[][] dirs = new int[][] {
-                    {1,0}, {-1,0}, {0,1}, {0,-1}
-            };
-
-            for (int[] d : dirs) {
-                int nx = x + d[0];
-                int ny = y + d[1];
-
-                if (nx < 0 || ny < 0 || nx >= bw || ny >= bh) continue;
-
-                int idx = ny * bw + nx;
-                if (visited[idx]) continue;
-
-                visited[idx] = true;
-
-                if (isWhiteLike(nx, ny)) {
-                    q.add(new int[]{nx, ny});
-                }
-            }
-        }
-
-        return new Rect(minX, minY, maxX + 1, maxY + 1);
-    }
 
     private void translateAndAdd(Rect r, String src, String lang) {
         String out = "[OCR]\n" + src;
