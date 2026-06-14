@@ -128,36 +128,31 @@ public class OverlayOcrService extends Service {
                 .build();
     }
 
+    
     private void createOverlay() {
         wm = (WindowManager)getSystemService(WINDOW_SERVICE);
 
         overlay = new FrameLayout(this);
+        overlay.setBackgroundColor(Color.TRANSPARENT);
         overlay.setClickable(false);
         overlay.setFocusable(false);
         overlay.setEnabled(false);
-        overlay.setBackgroundColor(Color.TRANSPARENT);
 
         WindowManager.LayoutParams lp = new WindowManager.LayoutParams(
                 WindowManager.LayoutParams.MATCH_PARENT,
                 WindowManager.LayoutParams.MATCH_PARENT,
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE |
-                        0 |
-                        WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                        | WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+                        | WindowManager.LayoutParams.FLAG_NOT_MODAL
+                        | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
                 PixelFormat.TRANSLUCENT
         );
 
-        
-        lp.flags =
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
-                | WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
-                | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS;
-
         wm.addView(overlay, lp);
-        showStatus("번역 모델 준비 중...");
     }
 
-    private void showStatus(String msg) {
+private void showStatus(String msg) {
         overlay.removeAllViews();
 
         TextView tv = new TextView(this);
@@ -400,6 +395,7 @@ public class OverlayOcrService extends Service {
     
     
     
+    
     private void addBottomPanel(String text) {
         TextView tv = new TextView(this);
         tv.setText(text);
@@ -409,6 +405,9 @@ public class OverlayOcrService extends Service {
         tv.setPadding(12, 10, 12, 10);
         tv.setMaxLines(8);
         tv.setSingleLine(false);
+        tv.setClickable(false);
+        tv.setFocusable(false);
+        tv.setEnabled(false);
 
         DisplayMetrics dm = getResources().getDisplayMetrics();
 
