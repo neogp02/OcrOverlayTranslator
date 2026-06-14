@@ -315,6 +315,7 @@ public class OverlayOcrService extends Service {
     
     
     
+    
     private void handleText(Text result, String lang) {
         if (result == null) return;
 
@@ -332,108 +333,34 @@ public class OverlayOcrService extends Service {
             items.add(new OcrItem(rr, text));
         }
 
-        String dump = debugGroupDump(items);
+        ArrayList<OcrItem> groups = groupBubbleCandidatesV2(items);
 
         overlay.removeAllViews();
         placedBoxes.clear();
 
-        TextView tv = new TextView(this);
-        tv.setText(dump);
-        tv.setTextSize(7);
-        tv.setTextColor(Color.WHITE);
-        tv.setBackgroundColor(0xDD000000);
-        tv.setPadding(8, 8, 8, 8);
-        tv.setMaxLines(180);
-
-        DisplayMetrics dm = getResources().getDisplayMetrics();
-
-        FrameLayout.LayoutParams lp =
-                new FrameLayout.LayoutParams(
-                        dm.widthPixels - 20,
-                        FrameLayout.LayoutParams.WRAP_CONTENT
-                );
-
-        lp.leftMargin = 10;
-        lp.topMargin = 40;
-
-        overlay.addView(tv, lp);
-    }
-
-    private String debugGroupDump(ArrayList<OcrItem> items) {
-        ArrayList<ArrayList<OcrItem>> groups = makeDebugGroups(items);
-
-        StringBuilder sb = new StringBuilder();
-        sb.append("[GROUP DEBUG DUMP]\n\n");
-        sb.append("items=").append(items.size()).append("\n");
-        sb.append("groups=").append(groups.size()).append("\n\n");
-
-        int gi = 1;
-
-        for (ArrayList<OcrItem> g : groups) {
-            ArrayList<ArrayList<OcrItem>> cols = splitDebugColumns(g);
-
-            Rect gr = rectOfItems(g);
-
-            sb.append("===== GROUP ").append(gi++).append(" =====\n");
-            sb.append("box=");
-            sb.append(gr.left).append(",");
-            sb.append(gr.top).append(",");
-            sb.append(gr.right).append(",");
-            sb.append(gr.bottom);
-            sb.append(" w=").append(gr.width());
-            sb.append(" h=").append(gr.height()).append("\n");
-            sb.append("items=").append(g.size());
-            sb.append(" columns=").append(cols.size()).append("\n");
-
-            int ci = 1;
-
-            for (ArrayList<OcrItem> col : cols) {
-                Rect cr = rectOfItems(col);
-                sb.append("  -- COL ").append(ci++).append(" ");
-                sb.append("cx=").append(cr.centerX());
-                sb.append(" box=");
-                sb.append(cr.left).append(",");
-                sb.append(cr.top).append(",");
-                sb.append(cr.right).append(",");
-                sb.append(cr.bottom).append("\n");
-
-                col.sort((a, b) -> Integer.compare(a.rect.top, b.rect.top));
-
-                for (OcrItem item : col) {
-                    sb.append("     item cx=").append(item.rect.centerX());
-                    sb.append(" cy=").append(item.rect.centerY());
-                    sb.append(" box=");
-                    sb.append(item.rect.left).append(",");
-                    sb.append(item.rect.top).append(",");
-                    sb.append(item.rect.right).append(",");
-                    sb.append(item.rect.bottom);
-                    sb.append(" text=[").append(item.text).append("]\n");
-                }
-            }
-
-            sb.append("\n");
+        int count = 0;
+        for (OcrItem g : groups) {
+            addTextBox(g.rect, g.text);
+            count++;
+            if (count >= 25) break;
         }
-
-        return sb.toString();
     }
 
-    private ArrayList<ArrayList<OcrItem>> makeDebugGroups(ArrayList<OcrItem> items) {
+    private ArrayList<OcrItem> groupBubbleCandidatesV2(ArrayList<OcrItem> items) {
         ArrayList<ArrayList<OcrItem>> groups = new ArrayList<>();
 
-        ArrayList<OcrItem> sorted = new ArrayList<>(items);
-
-        sorted.sort((a, b) -> {
-            if (Math.abs(a.rect.top - b.rect.top) > 120) {
+        items.sort((a, b) -> {
+            if (Math.abs(a.rect.top - b.rect.top) > 100) {
                 return Integer.compare(a.rect.top, b.rect.top);
             }
             return Integer.compare(b.rect.centerX(), a.rect.centerX());
         });
 
-        for (OcrItem cur : sorted) {
+        for (OcrItem cur : items) {
             boolean added = false;
 
-            for (ArrayList<OcrItem> group : groups) {
-                Rect gr = rectOfItems(group);
+            for (ArrayList<OcrItem> g : groups) {
+                Rect gr = rectOfItemsV2(g);
 
                 int dx = Math.abs(cur.rect.centerX() - gr.centerX());
                 int dy = Math.abs(cur.rect.centerY() - gr.centerY());
@@ -441,13 +368,18 @@ public class OverlayOcrService extends Service {
                 int overlapY = Math.min(cur.rect.bottom, gr.bottom) - Math.max(cur.rect.top, gr.top);
                 int gapY = Math.max(0, Math.max(cur.rect.top - gr.bottom, gr.top - cur.rect.bottom));
 
-                boolean closeX = dx < 95;
-                boolean closeY = dy < 260 || gapY < 120;
-                boolean yRelated = overlapY > -120;
-                boolean notTooLarge = gr.width() < 190 && gr.height() < 430;
+                Rect test = new Rect(gr);
+                test.union(cur.rect);
 
-                if (closeX && closeY && yRelated && notTooLarge) {
-                    group.add(cur);
+                boolean closeColumn = dx < 70;
+                boolean yClose = overlapY > -45 || gapY < 70;
+                boolean centerClose = dy < 210;
+
+                // 말풍선 하나가 비정상적으로 커지는 것 방지
+                boolean sizeOk = test.width() < 145 && test.height() < 340;
+
+                if (closeColumn && yClose && centerClose && sizeOk) {
+                    g.add(cur);
                     added = true;
                     break;
                 }
@@ -460,10 +392,27 @@ public class OverlayOcrService extends Service {
             }
         }
 
-        return groups;
+        ArrayList<OcrItem> out = new ArrayList<>();
+
+        for (ArrayList<OcrItem> g : groups) {
+            Rect area = rectOfItemsV2(g);
+            String text = orderVerticalTextV2(g);
+
+            if (text.trim().length() == 0) continue;
+            out.add(new OcrItem(area, text.trim()));
+        }
+
+        out.sort((a, b) -> {
+            if (Math.abs(a.rect.top - b.rect.top) > 90) {
+                return Integer.compare(a.rect.top, b.rect.top);
+            }
+            return Integer.compare(b.rect.centerX(), a.rect.centerX());
+        });
+
+        return out;
     }
 
-    private ArrayList<ArrayList<OcrItem>> splitDebugColumns(ArrayList<OcrItem> group) {
+    private String orderVerticalTextV2(ArrayList<OcrItem> group) {
         ArrayList<ArrayList<OcrItem>> columns = new ArrayList<>();
 
         ArrayList<OcrItem> sorted = new ArrayList<>(group);
@@ -473,10 +422,10 @@ public class OverlayOcrService extends Service {
             boolean added = false;
 
             for (ArrayList<OcrItem> col : columns) {
-                Rect cr = rectOfItems(col);
+                Rect cr = rectOfItemsV2(col);
                 int dx = Math.abs(item.rect.centerX() - cr.centerX());
 
-                if (dx < 38) {
+                if (dx < 32) {
                     col.add(item);
                     added = true;
                     break;
@@ -491,16 +440,26 @@ public class OverlayOcrService extends Service {
         }
 
         columns.sort((a, b) -> {
-            Rect ar = rectOfItems(a);
-            Rect br = rectOfItems(b);
+            Rect ar = rectOfItemsV2(a);
+            Rect br = rectOfItemsV2(b);
             return Integer.compare(br.centerX(), ar.centerX());
         });
 
-        return columns;
+        StringBuilder sb = new StringBuilder();
+
+        for (ArrayList<OcrItem> col : columns) {
+            col.sort((a, b) -> Integer.compare(a.rect.top, b.rect.top));
+
+            for (OcrItem item : col) {
+                if (sb.length() > 0) sb.append("\n");
+                sb.append(item.text);
+            }
+        }
+
+        return sb.toString();
     }
 
-
-    private Rect rectOfItems(ArrayList<OcrItem> items) {
+    private Rect rectOfItemsV2(ArrayList<OcrItem> items) {
         Rect r = new Rect(items.get(0).rect);
         for (OcrItem item : items) {
             r.union(item.rect);
