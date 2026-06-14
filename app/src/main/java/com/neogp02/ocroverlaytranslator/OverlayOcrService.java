@@ -10,6 +10,7 @@ import android.media.projection.MediaProjection;
 import android.media.projection.MediaProjectionManager;
 import android.os.*;
 import android.util.DisplayMetrics;
+import android.util.Log;
 import android.view.*;
 import android.widget.*;
 
@@ -304,6 +305,20 @@ public class OverlayOcrService extends Service {
     
     private void handleText(Text result, String lang) {
         if (result == null) return;
+
+        Log.d("MLKIT_RAW", "================ RAW OCR START ================");
+        Log.d("MLKIT_RAW", result.getText());
+        Log.d("MLKIT_RAW", "================ RAW OCR END ==================");
+
+        for (Text.TextBlock block : result.getTextBlocks()) {
+            Log.d("MLKIT_BLOCK", "BLOCK=[" + block.getText() + "]");
+            for (Text.Line line : block.getLines()) {
+                Log.d("MLKIT_LINE", "LINE=[" + line.getText() + "]");
+                for (Text.Element element : line.getElements()) {
+                    Log.d("MLKIT_ELEMENT", "ELEMENT=[" + element.getText() + "] BOX=" + element.getBoundingBox());
+                }
+            }
+        }
 
         ArrayList<OcrItem> items = new ArrayList<>();
 
