@@ -326,7 +326,8 @@ public class OverlayOcrService extends Service {
             if (text.length() < 2) continue;
             if (!containsJpOrZh(text)) continue;
 
-            addTextBox(r, "[BLOCK]\n" + text);
+            Rect rr = new Rect(r.left / 2, r.top / 2, r.right / 2, r.bottom / 2);
+            addTextBox(rr, text);
 
             count++;
             if (count >= 20) break;
@@ -518,6 +519,7 @@ private boolean containsJpOrZh(String s) {
     
     
     
+    
     private void addTextBox(Rect r, String text) {
         if (text == null) return;
 
@@ -526,29 +528,30 @@ private boolean containsJpOrZh(String s) {
 
         TextView tv = new TextView(this);
         tv.setText(text);
-        tv.setTextSize(9);
+        tv.setTextSize(8);
         tv.setTextColor(Color.WHITE);
         tv.setBackgroundColor(0xCC000000);
-        tv.setPadding(5, 3, 5, 3);
-        tv.setMaxLines(12);
+        tv.setPadding(4, 3, 4, 3);
+        tv.setMaxLines(20);
 
         DisplayMetrics dm = getResources().getDisplayMetrics();
 
-        int w = Math.max(65, r.width() + 25);
-        int h = Math.max(50, r.height() + 20);
+        int w = Math.max(55, r.width() + 20);
+        int h = Math.max(45, r.height() + 25);
 
-        if (w > 145) w = 145;
-        if (h > 145) h = 145;
+        // 너무 작게 잘리는 문제 완화
+        if (w > 170) w = 170;
+        if (h > 260) h = 260;
 
-        int x = Math.max(0, r.left - 3);
-        int y = Math.max(0, r.top - 3);
+        int x = Math.max(0, r.left - 2);
+        int y = Math.max(0, r.top - 2);
 
         if (x + w > dm.widthPixels) {
-            x = Math.max(0, dm.widthPixels - w - 3);
+            x = Math.max(0, dm.widthPixels - w - 2);
         }
 
         if (y + h > dm.heightPixels) {
-            y = Math.max(0, dm.heightPixels - h - 3);
+            y = Math.max(0, dm.heightPixels - h - 2);
         }
 
         FrameLayout.LayoutParams fp = new FrameLayout.LayoutParams(w, h);
