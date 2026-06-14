@@ -533,6 +533,7 @@ private boolean containsJpOrZh(String s) {
     
     
     
+    
     private void addTextBox(Rect r, String text) {
         if (text == null) return;
 
@@ -541,19 +542,17 @@ private boolean containsJpOrZh(String s) {
 
         TextView tv = new TextView(this);
         tv.setText(text);
-        tv.setTextSize(8);
+        tv.setTextSize(6);
         tv.setTextColor(Color.WHITE);
         tv.setBackgroundColor(0xCC000000);
         tv.setPadding(3, 2, 3, 2);
-        tv.setMaxLines(8);
+        tv.setSingleLine(false);
+        tv.setMaxLines(20);
 
         DisplayMetrics dm = getResources().getDisplayMetrics();
 
-        int w = Math.max(42, r.width() + 18);
-        int h = Math.max(36, r.height() + 18);
-
-        if (w > 120) w = 120;
-        if (h > 180) h = 180;
+        int w = Math.max(48, r.width() + 26);
+        int h = Math.max(60, r.height() + 80);
 
         int x = Math.max(0, r.left - 2);
         int y = Math.max(0, r.top - 2);
