@@ -489,6 +489,7 @@ private boolean containsJpOrZh(String s) {
     }
 
 
+    
     private void addTextBox(Rect r, String text) {
         if (text == null) return;
 
@@ -497,38 +498,43 @@ private boolean containsJpOrZh(String s) {
 
         TextView tv = new TextView(this);
         tv.setText(text);
-        tv.setTextSize(12);
+        tv.setTextSize(11);
         tv.setTextColor(Color.WHITE);
         tv.setBackgroundColor(0xDD000000);
-        tv.setPadding(8, 5, 8, 5);
+        tv.setPadding(7, 4, 7, 4);
         tv.setMaxLines(8);
 
         DisplayMetrics dm = getResources().getDisplayMetrics();
 
-        int boxW = Math.max(120, r.width() + 55);
-        int boxH = FrameLayout.LayoutParams.WRAP_CONTENT;
+        int boxW = Math.max(95, r.width() + 45);
+        int boxH = Math.max(60, r.height() + 45);
 
-        // 세로 말풍선은 조금 좁고 길게
         if (r.height() > r.width() * 1.3f) {
-            boxW = Math.max(95, r.width() + 45);
-            tv.setTextSize(11);
-            tv.setMaxLines(12);
+            boxW = Math.max(85, r.width() + 35);
+            boxH = Math.max(70, r.height() + 35);
+            tv.setTextSize(10);
+            tv.setMaxLines(10);
         }
 
-        int x = Math.max(0, r.left - 6);
-
-        // 가능하면 원문 위쪽에 표시.
-        // 위쪽 공간이 부족하면 원문 위치에 표시.
-        int estimatedH = Math.max(70, r.height() + 50);
-        int y;
-        if (r.top - estimatedH - 6 > 0) {
-            y = r.top - estimatedH - 6;
-        } else {
-            y = Math.max(0, r.top - 6);
-        }
+        int x = Math.max(0, r.left - 4);
+        int y = Math.max(0, r.top - 4);
 
         if (x + boxW > dm.widthPixels) {
             x = Math.max(0, dm.widthPixels - boxW - 4);
+        }
+
+        if (y + boxH > dm.heightPixels) {
+            y = Math.max(0, dm.heightPixels - boxH - 4);
+        }
+
+        Rect newBox = new Rect(x, y, x + boxW, y + boxH);
+
+        // 이미 표시된 박스와 겹치면 이번 박스는 버림
+        for (Rect old : placedBoxes) {
+            Rect padded = new Rect(old.left - 6, old.top - 6, old.right + 6, old.bottom + 6);
+            if (Rect.intersects(newBox, padded)) {
+                return;
+            }
         }
 
         FrameLayout.LayoutParams fp = new FrameLayout.LayoutParams(boxW, boxH);
@@ -536,6 +542,7 @@ private boolean containsJpOrZh(String s) {
         fp.topMargin = y;
 
         overlay.addView(tv, fp);
+        placedBoxes.add(newBox);
     }
 
 @Override
