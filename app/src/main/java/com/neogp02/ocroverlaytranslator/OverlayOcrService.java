@@ -306,18 +306,35 @@ public class OverlayOcrService extends Service {
     
     
     
+    
     private void handleText(Text result, String lang) {
         if (result == null) return;
 
         StringBuilder sb = new StringBuilder();
-        sb.append("[ML KIT BLOCK TEST]\n\n");
+        sb.append("[ML KIT BLOCK + BOX TEST]\n\n");
 
         int index = 1;
 
         for (Text.TextBlock block : result.getTextBlocks()) {
+            Rect r = block.getBoundingBox();
+
             sb.append("===== BLOCK ");
             sb.append(index++);
             sb.append(" =====\n");
+
+            if (r != null) {
+                sb.append("BOX: ");
+                sb.append("L=").append(r.left);
+                sb.append(" T=").append(r.top);
+                sb.append(" R=").append(r.right);
+                sb.append(" B=").append(r.bottom);
+                sb.append(" W=").append(r.width());
+                sb.append(" H=").append(r.height());
+                sb.append("\n");
+            } else {
+                sb.append("BOX: null\n");
+            }
+
             sb.append(block.getText());
             sb.append("\n\n");
         }
@@ -327,11 +344,11 @@ public class OverlayOcrService extends Service {
 
         TextView tv = new TextView(this);
         tv.setText(sb.toString());
-        tv.setTextSize(12);
+        tv.setTextSize(10);
         tv.setTextColor(Color.WHITE);
         tv.setBackgroundColor(0xDD000000);
-        tv.setPadding(12, 12, 12, 12);
-        tv.setMaxLines(60);
+        tv.setPadding(10, 10, 10, 10);
+        tv.setMaxLines(80);
 
         DisplayMetrics dm = getResources().getDisplayMetrics();
 
@@ -342,7 +359,7 @@ public class OverlayOcrService extends Service {
                 );
 
         lp.leftMargin = 10;
-        lp.topMargin = 80;
+        lp.topMargin = 60;
 
         overlay.addView(tv, lp);
     }
