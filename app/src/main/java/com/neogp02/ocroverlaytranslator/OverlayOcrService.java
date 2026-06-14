@@ -390,41 +390,32 @@ public class OverlayOcrService extends Service {
     
     
     
+    
     private void addBottomPanel(String text) {
-        android.widget.ScrollView scroll = new android.widget.ScrollView(this);
-        scroll.setBackgroundColor(0xCC000000);
-        scroll.setFillViewport(false);
-        scroll.setVerticalScrollBarEnabled(true);
-        scroll.setClickable(true);
-        scroll.setFocusable(true);
-
         TextView tv = new TextView(this);
         tv.setText(text);
         tv.setTextSize(10);
         tv.setTextColor(Color.WHITE);
-        tv.setPadding(12, 10, 12, 40);
+        tv.setBackgroundColor(0xCC000000);
+        tv.setPadding(12, 10, 12, 10);
+        tv.setMaxLines(8);
         tv.setSingleLine(false);
-
-        scroll.addView(
-                tv,
-                new android.widget.ScrollView.LayoutParams(
-                        android.widget.ScrollView.LayoutParams.MATCH_PARENT,
-                        android.widget.ScrollView.LayoutParams.WRAP_CONTENT
-                )
-        );
 
         DisplayMetrics dm = getResources().getDisplayMetrics();
 
-        int panelHeight = Math.min(280, dm.heightPixels / 4);
-        int bottomOffset = 170;
+        int panelHeight = Math.min(260, dm.heightPixels / 4);
+        int bottomOffset = 200;
 
         FrameLayout.LayoutParams fp =
-                new FrameLayout.LayoutParams(dm.widthPixels, panelHeight);
+                new FrameLayout.LayoutParams(
+                        dm.widthPixels,
+                        panelHeight
+                );
 
         fp.leftMargin = 0;
         fp.topMargin = dm.heightPixels - panelHeight - bottomOffset;
 
-        overlay.addView(scroll, fp);
+        overlay.addView(tv, fp);
     }
 
 
