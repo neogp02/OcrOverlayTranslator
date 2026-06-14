@@ -48,6 +48,7 @@ public class OverlayOcrService extends Service {
 
     private WindowManager wm;
     private FrameLayout overlay;
+    private android.widget.ScrollView bottomPanel;
     private MediaProjection projection;
     private ImageReader reader;
     private Handler handler;
@@ -396,35 +397,63 @@ panel.append("[")
     
     
     
+    
     private void addBottomPanel(String text) {
         text = text.replace("\\n", "\n");
+
+        if (wm == null) {
+            wm = (WindowManager)getSystemService(WINDOW_SERVICE);
+        }
+
+        if (bottomPanel != null) {
+            try {
+                wm.removeView(bottomPanel);
+            } catch (Throwable ignored) {}
+            bottomPanel = null;
+        }
+
+        bottomPanel = new android.widget.ScrollView(this);
+        bottomPanel.setBackgroundColor(0xCC000000);
+        bottomPanel.setFillViewport(false);
+        bottomPanel.setVerticalScrollBarEnabled(true);
+        bottomPanel.setClickable(true);
+        bottomPanel.setFocusable(false);
+
         TextView tv = new TextView(this);
         tv.setText(text);
         tv.setTextSize(10);
         tv.setTextColor(Color.WHITE);
-        tv.setBackgroundColor(0x66000000);
-        tv.setPadding(12, 10, 12, 10);
-        tv.setMaxLines(8);
+        tv.setPadding(12, 10, 12, 40);
         tv.setSingleLine(false);
-        tv.setClickable(false);
-        tv.setFocusable(false);
-        tv.setEnabled(false);
+
+        bottomPanel.addView(
+                tv,
+                new android.widget.ScrollView.LayoutParams(
+                        android.widget.ScrollView.LayoutParams.MATCH_PARENT,
+                        android.widget.ScrollView.LayoutParams.WRAP_CONTENT
+                )
+        );
 
         DisplayMetrics dm = getResources().getDisplayMetrics();
 
-        int panelHeight = Math.min(260, dm.heightPixels / 4);
-        int bottomOffset = 200;
+        int panelHeight = Math.min(360, dm.heightPixels / 3);
+        int bottomOffset = 160;
 
-        FrameLayout.LayoutParams fp =
-                new FrameLayout.LayoutParams(
-                        dm.widthPixels,
-                        panelHeight
-                );
+        WindowManager.LayoutParams lp = new WindowManager.LayoutParams(
+                dm.widthPixels,
+                panelHeight,
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                        | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
+                        | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                PixelFormat.TRANSLUCENT
+        );
 
-        fp.leftMargin = 0;
-        fp.topMargin = dm.heightPixels - panelHeight - bottomOffset;
+        lp.gravity = Gravity.TOP | Gravity.LEFT;
+        lp.x = 0;
+        lp.y = dm.heightPixels - panelHeight - bottomOffset;
 
-        overlay.addView(tv, fp);
+        wm.addView(bottomPanel, lp);
     }
 
 
@@ -484,6 +513,7 @@ panel.append("[")
         try {
             if (handler != null) handler.removeCallbacksAndMessages(null);
             if (overlay != null && wm != null) wm.removeView(overlay);
+            if (bottomPanel != null && wm != null) wm.removeView(bottomPanel);
             if (projection != null) projection.stop();
 
             if (jpRecognizer != null) jpRecognizer.close();
