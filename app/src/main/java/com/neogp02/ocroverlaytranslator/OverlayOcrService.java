@@ -311,13 +311,11 @@ public class OverlayOcrService extends Service {
     
     
     
+    
     private void handleText(Text result, String lang) {
         if (result == null) return;
 
-        overlay.removeAllViews();
-        placedBoxes.clear();
-
-        int count = 0;
+        ArrayList<OcrItem> lines = new ArrayList<>();
 
         for (Text.TextBlock block : result.getTextBlocks()) {
             for (Text.Line line : block.getLines()) {
@@ -328,7 +326,6 @@ public class OverlayOcrService extends Service {
                 if (text.length() < 2) continue;
                 if (!containsJpOrZh(text)) continue;
 
-                // OCR 이미지를 2배 확대해서 넣었으므로 좌표 /2 보정
                 Rect rr = new Rect(
                         r.left / 2,
                         r.top / 2,
@@ -336,14 +333,68 @@ public class OverlayOcrService extends Service {
                         r.bottom / 2
                 );
 
-                addTextBox(rr, text);
-
-                count++;
-                if (count >= 35) break;
+                lines.add(new OcrItem(rr, text));
             }
+        }
 
+        ArrayList<OcrItem> merged = mergeVerticalLines(lines);
+
+        overlay.removeAllViews();
+        placedBoxes.clear();
+
+        int count = 0;
+        for (OcrItem item : merged) {
+            addTextBox(item.rect, item.text);
+            count++;
             if (count >= 35) break;
         }
+    }
+
+    private ArrayList<OcrItem> mergeVerticalLines(ArrayList<OcrItem> lines) {
+        ArrayList<OcrItem> sorted = new ArrayList<>(lines);
+
+        // 위쪽부터 처리. 같은 높이면 오른쪽부터.
+        sorted.sort((a, b) -> {
+            if (Math.abs(a.rect.top - b.rect.top) > 40) {
+                return Integer.compare(a.rect.top, b.rect.top);
+            }
+            return Integer.compare(b.rect.centerX(), a.rect.centerX());
+        });
+
+        ArrayList<OcrItem> merged = new ArrayList<>();
+
+        for (OcrItem cur : sorted) {
+            boolean added = false;
+
+            for (OcrItem m : merged) {
+                int dx = Math.abs(cur.rect.centerX() - m.rect.centerX());
+                int verticalGap = cur.rect.top - m.rect.bottom;
+
+                boolean sameColumn = dx < 35;
+                boolean below = verticalGap >= -15;
+                boolean closeVertically = verticalGap < 130;
+
+                if (sameColumn && below && closeVertically) {
+                    m.text = m.text + "\n" + cur.text;
+                    m.rect.union(cur.rect);
+                    added = true;
+                    break;
+                }
+            }
+
+            if (!added) {
+                merged.add(new OcrItem(new Rect(cur.rect), cur.text));
+            }
+        }
+
+        merged.sort((a, b) -> {
+            if (Math.abs(a.rect.top - b.rect.top) > 80) {
+                return Integer.compare(a.rect.top, b.rect.top);
+            }
+            return Integer.compare(b.rect.centerX(), a.rect.centerX());
+        });
+
+        return merged;
     }
 
 private String cleanSource(String s) {
