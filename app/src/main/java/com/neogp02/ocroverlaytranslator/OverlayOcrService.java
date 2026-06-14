@@ -428,7 +428,7 @@ public class OverlayOcrService extends Service {
                     int overlapY = Math.min(base.bottom, r.bottom) - Math.max(base.top, r.top);
 
                     // 같은 말풍선 안의 옆 열이라고 판단
-                    if (gapX < 35 && overlapY > 10) {
+                    if (gapX < 20 && overlapY > 40) {
                         groupCols.add(columns.get(j));
                         base.union(r);
                         usedCol[j] = true;
@@ -548,71 +548,48 @@ private boolean containsJpOrZh(String s) {
         addTextBox(r, out);
     }
 
-private void addTextBox(Rect r, String text) {
+
+    private void addTextBox(Rect r, String text) {
+        if (text == null) return;
+
+        text = text.trim();
+        if (text.length() == 0) return;
+
         TextView tv = new TextView(this);
         tv.setText(text);
         tv.setTextSize(12);
         tv.setTextColor(Color.WHITE);
-        tv.setBackgroundColor(0xEE000000);
-        tv.setPadding(10, 6, 10, 6);
-        tv.setMaxLines(5);
-
-        int boxW = Math.max(150, r.width() + 60);
-        int boxH = Math.max(46, r.height() + 24);
-
-        // 세로글자/좁은 말풍선 보정
-        if (r.height() > r.width() * 1.5f) {
-            boxW = Math.max(130, r.width() + 90);
-            boxH = Math.max(90, r.height() + 20);
-            tv.setTextSize(12);
-        }
-
-        FrameLayout.LayoutParams fp = new FrameLayout.LayoutParams(boxW, boxH);
-
-        int x = Math.max(0, r.left - 8);
-        int y = Math.max(0, r.top - 8);
-
-        // 기존 박스와 겹치면 아래로 밀기
-        int maxTry = 8;
-        for (int i = 0; i < maxTry; i++) {
-            boolean overlap = false;
-
-            for (int j = 0; j < overlay.getChildCount(); j++) {
-                View child = overlay.getChildAt(j);
-                FrameLayout.LayoutParams cp = (FrameLayout.LayoutParams) child.getLayoutParams();
-
-                Rect a = new Rect(x, y, x + boxW, y + boxH);
-                Rect b = new Rect(cp.leftMargin, cp.topMargin,
-                        cp.leftMargin + child.getWidth() + 20,
-                        cp.topMargin + child.getHeight() + 20);
-
-                if (Rect.intersects(a, b)) {
-                    overlap = true;
-                    break;
-                }
-            }
-
-            if (!overlap) break;
-            y += boxH + 8;
-        }
+        tv.setBackgroundColor(0xDD000000);
+        tv.setPadding(8, 5, 8, 5);
+        tv.setMaxLines(8);
 
         DisplayMetrics dm = getResources().getDisplayMetrics();
 
+        int boxW = Math.max(120, r.width() + 55);
+        int boxH = FrameLayout.LayoutParams.WRAP_CONTENT;
+
+        // 세로 말풍선은 조금 좁고 길게
+        if (r.height() > r.width() * 1.3f) {
+            boxW = Math.max(95, r.width() + 45);
+            tv.setTextSize(11);
+            tv.setMaxLines(12);
+        }
+
+        int x = Math.max(0, r.left - 6);
+        int y = Math.max(0, r.top - 6);
+
         if (x + boxW > dm.widthPixels) {
-            x = Math.max(0, dm.widthPixels - boxW - 8);
+            x = Math.max(0, dm.widthPixels - boxW - 4);
         }
 
-        if (y + boxH > dm.heightPixels) {
-            y = Math.max(0, r.top - boxH - 8);
-        }
-
+        FrameLayout.LayoutParams fp = new FrameLayout.LayoutParams(boxW, boxH);
         fp.leftMargin = x;
         fp.topMargin = y;
 
         overlay.addView(tv, fp);
     }
 
-    @Override
+@Override
     public void onDestroy() {
         try {
             if (handler != null) handler.removeCallbacksAndMessages(null);
