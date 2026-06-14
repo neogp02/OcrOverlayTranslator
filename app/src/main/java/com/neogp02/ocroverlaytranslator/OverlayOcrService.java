@@ -374,13 +374,14 @@ private void showStatus(String msg) {
         addBottomPanel(panel.toString());
     }
 
+    
     private ArrayList<OcrItem> groupLinesByXYStart(ArrayList<OcrItem> lines) {
         ArrayList<ArrayList<OcrItem>> groups = new ArrayList<>();
 
         ArrayList<OcrItem> sorted = new ArrayList<>(lines);
 
         sorted.sort((a, b) -> {
-            if (Math.abs(a.rect.top - b.rect.top) > 90) {
+            if (Math.abs(a.rect.top - b.rect.top) > 80) {
                 return Integer.compare(a.rect.top, b.rect.top);
             }
             return Integer.compare(b.rect.centerX(), a.rect.centerX());
@@ -394,20 +395,42 @@ private void showStatus(String msg) {
                 Rect test = new Rect(gr);
                 test.union(cur.rect);
 
-                int xDist = Math.abs(cur.rect.centerX() - gr.centerX());
-                int yStartDist = Math.abs(cur.rect.top - gr.top);
+                boolean sizeOk =
+                        test.width() < 150 &&
+                        test.height() < 300;
 
-                int yOverlap = Math.min(cur.rect.bottom, gr.bottom) - Math.max(cur.rect.top, gr.top);
-                int yGap = Math.max(0, Math.max(cur.rect.top - gr.bottom, gr.top - cur.rect.bottom));
+                if (!sizeOk) continue;
 
-                boolean xClose = xDist < 95;
-                boolean yStartClose = yStartDist < 90;
-                boolean yConnected = yOverlap > -40 || yGap < 70;
+                boolean pairMatch = false;
 
-                // 말풍선 하나로 보기엔 너무 큰 그룹 방지
-                boolean sizeOk = test.width() < 170 && test.height() < 360;
+                for (OcrItem old : g) {
+                    int xDist = Math.abs(cur.rect.centerX() - old.rect.centerX());
+                    int yStartDist = Math.abs(cur.rect.top - old.rect.top);
 
-                if (xClose && yStartClose && yConnected && sizeOk) {
+                    int yOverlap =
+                            Math.min(cur.rect.bottom, old.rect.bottom)
+                            - Math.max(cur.rect.top, old.rect.top);
+
+                    int yGap =
+                            Math.max(0,
+                                    Math.max(cur.rect.top - old.rect.bottom,
+                                             old.rect.top - cur.rect.bottom));
+
+                    boolean xClose = xDist < 75;
+
+                    // 핵심: 말풍선 안 같은 세로열/인접열은 Y 시작점이 비슷해야 함
+                    boolean yStartClose = yStartDist < 45;
+
+                    // 너무 멀리 떨어진 줄은 같은 말풍선으로 보지 않음
+                    boolean yConnected = yOverlap > -30 || yGap < 55;
+
+                    if (xClose && yStartClose && yConnected) {
+                        pairMatch = true;
+                        break;
+                    }
+                }
+
+                if (pairMatch) {
                     g.add(cur);
                     added = true;
                     break;
@@ -434,6 +457,7 @@ private void showStatus(String msg) {
 
         return out;
     }
+
 
     private Rect rectOfLineGroup(ArrayList<OcrItem> group) {
         Rect r = new Rect(group.get(0).rect);
