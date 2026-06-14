@@ -364,12 +364,7 @@ items.add(new OcrItem(rr, src));
             String compactText = g.text.replace("\n", "").replace(" ", "").replace("　", "").trim();
             if (compactText.length() > 70) continue;
 
-            Rect bubbleRect = findWhiteBubbleRect(g.rect);
-            if (bubbleRect == null) {
-                bubbleRect = g.rect;
-            }
-
-            translateAndAdd(bubbleRect, g.text, lang);
+            translateAndAdd(g.rect, g.text, lang);
 
             count++;
             if (count >= 12) break;
@@ -631,6 +626,7 @@ private boolean containsJpOrZh(String s) {
 
     
     
+    
     private void addTextBox(Rect r, String text) {
         if (text == null) return;
 
@@ -639,40 +635,37 @@ private boolean containsJpOrZh(String s) {
 
         TextView tv = new TextView(this);
         tv.setText(text);
+        tv.setTextSize(10);
         tv.setTextColor(Color.WHITE);
-        tv.setBackgroundColor(0xCC000000);
-        tv.setPadding(5, 3, 5, 3);
-        tv.setMaxLines(8);
-
-        int w = Math.max(55, r.width());
-        int h = Math.max(45, r.height());
-
-        if (w > 180) w = 180;
-        if (h > 180) h = 180;
-
-        if (w < 90 || h < 80) {
-            tv.setTextSize(9);
-        } else {
-            tv.setTextSize(10);
-        }
+        tv.setBackgroundColor(0xDD000000);
+        tv.setPadding(6, 4, 6, 4);
+        tv.setMaxLines(10);
 
         DisplayMetrics dm = getResources().getDisplayMetrics();
 
-        int x = Math.max(0, r.left);
-        int y = Math.max(0, r.top);
+        int w = Math.max(70, r.width() + 35);
+        int h = Math.max(55, r.height() + 30);
+
+        // 너무 큰 박스 방지
+        if (w > 150) w = 150;
+        if (h > 150) h = 150;
+
+        int x = Math.max(0, r.left - 3);
+        int y = Math.max(0, r.top - 3);
 
         if (x + w > dm.widthPixels) {
-            w = dm.widthPixels - x - 2;
+            x = Math.max(0, dm.widthPixels - w - 3);
         }
 
         if (y + h > dm.heightPixels) {
-            h = dm.heightPixels - y - 2;
+            y = Math.max(0, dm.heightPixels - h - 3);
         }
 
         Rect newBox = new Rect(x, y, x + w, y + h);
 
+        // 겹침 제거는 유지하되 여유는 작게
         for (Rect old : placedBoxes) {
-            Rect padded = new Rect(old.left - 3, old.top - 3, old.right + 3, old.bottom + 3);
+            Rect padded = new Rect(old.left - 2, old.top - 2, old.right + 2, old.bottom + 2);
             if (Rect.intersects(newBox, padded)) {
                 return;
             }
