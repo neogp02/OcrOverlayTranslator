@@ -313,76 +313,124 @@ public class OverlayOcrService extends Service {
     
     
     
+    
     private void handleText(Text result, String lang) {
         if (result == null) return;
 
-        StringBuilder sb = new StringBuilder();
-        sb.append("[ELEMENT DUMP]\n\n");
-
-        int blockIndex = 1;
+        ArrayList<OcrItem> items = new ArrayList<>();
 
         for (Text.TextBlock block : result.getTextBlocks()) {
-            sb.append("B").append(blockIndex++).append(": ");
-            sb.append(block.getText()).append("\n");
+            Rect r = block.getBoundingBox();
+            String text = cleanSource(block.getText());
 
-            int lineIndex = 1;
+            if (r == null) continue;
+            if (text.length() < 2) continue;
+            if (!containsJpOrZh(text)) continue;
 
-            for (Text.Line line : block.getLines()) {
-                Rect lr = line.getBoundingBox();
+            Rect rr = new Rect(
+                    r.left / 2,
+                    r.top / 2,
+                    r.right / 2,
+                    r.bottom / 2
+            );
 
-                sb.append("  L").append(lineIndex++).append(" ");
-                if (lr != null) {
-                    sb.append("box=");
-                    sb.append(lr.left).append(",");
-                    sb.append(lr.top).append(",");
-                    sb.append(lr.right).append(",");
-                    sb.append(lr.bottom).append(" ");
-                }
-                sb.append("text=[").append(line.getText()).append("]\n");
-
-                int elementIndex = 1;
-
-                for (Text.Element element : line.getElements()) {
-                    Rect er = element.getBoundingBox();
-
-                    sb.append("    E").append(elementIndex++).append(" ");
-                    if (er != null) {
-                        sb.append("box=");
-                        sb.append(er.left).append(",");
-                        sb.append(er.top).append(",");
-                        sb.append(er.right).append(",");
-                        sb.append(er.bottom).append(" ");
-                    }
-                    sb.append("text=[").append(element.getText()).append("]\n");
-                }
-            }
-
-            sb.append("\n");
+            items.add(new OcrItem(rr, text));
         }
+
+        ArrayList<OcrItem> groups = groupSpeechBubbles(items);
 
         overlay.removeAllViews();
         placedBoxes.clear();
 
-        TextView tv = new TextView(this);
-        tv.setText(sb.toString());
-        tv.setTextSize(7);
-        tv.setTextColor(Color.WHITE);
-        tv.setBackgroundColor(0xDD000000);
-        tv.setPadding(8, 8, 8, 8);
-        tv.setMaxLines(160);
+        int count = 0;
+        for (OcrItem g : groups) {
+            addTextBox(g.rect, g.text);
+            count++;
+            if (count >= 25) break;
+        }
+    }
 
-        DisplayMetrics dm = getResources().getDisplayMetrics();
+    private ArrayList<OcrItem> groupSpeechBubbles(ArrayList<OcrItem> items) {
+        ArrayList<ArrayList<OcrItem>> groups = new ArrayList<>();
 
-        FrameLayout.LayoutParams lp =
-                new FrameLayout.LayoutParams(
-                        dm.widthPixels - 20,
-                        FrameLayout.LayoutParams.WRAP_CONTENT
-                );
+        items.sort((a, b) -> {
+            if (Math.abs(a.rect.top - b.rect.top) > 120) {
+                return Integer.compare(a.rect.top, b.rect.top);
+            }
+            return Integer.compare(b.rect.centerX(), a.rect.centerX());
+        });
 
-        lp.leftMargin = 10;
-        lp.topMargin = 40;
+        for (OcrItem cur : items) {
+            boolean added = false;
 
-        overlay.addView(tv, lp);
+            for (ArrayList<OcrItem> group : groups) {
+                Rect gr = rectOfItems(group);
+
+                int dx = Math.abs(cur.rect.centerX() - gr.centerX());
+                int dy = Math.abs(cur.rect.centerY() - gr.centerY());
+
+                int overlapY = Math.min(cur.rect.bottom, gr.bottom) - Math.max(cur.rect.top, gr.top);
+                int gapY = Math.max(0, Math.max(cur.rect.top - gr.bottom, gr.top - cur.rect.bottom));
+
+                boolean closeX = dx < 95;
+                boolean closeY = dy < 260 || gapY < 120;
+                boolean yRelated = overlapY > -120;
+
+                // 너무 멀리 있는 다른 컷/다른 말풍선끼리 합쳐지는 것 방지
+                boolean notTooLarge = gr.width() < 190 && gr.height() < 430;
+
+                if (closeX && closeY && yRelated && notTooLarge) {
+                    group.add(cur);
+                    added = true;
+                    break;
+                }
+            }
+
+            if (!added) {
+                ArrayList<OcrItem> ng = new ArrayList<>();
+                ng.add(cur);
+                groups.add(ng);
+            }
+        }
+
+        ArrayList<OcrItem> out = new ArrayList<>();
+
+        for (ArrayList<OcrItem> group : groups) {
+            group.sort((a, b) -> {
+                // 세로쓰기: 오른쪽 열부터 왼쪽 열
+                if (Math.abs(a.rect.centerX() - b.rect.centerX()) > 25) {
+                    return Integer.compare(b.rect.centerX(), a.rect.centerX());
+                }
+                return Integer.compare(a.rect.top, b.rect.top);
+            });
+
+            StringBuilder sb = new StringBuilder();
+            Rect area = rectOfItems(group);
+
+            for (OcrItem item : group) {
+                if (sb.length() > 0) sb.append("\n");
+                sb.append(item.text);
+            }
+
+            out.add(new OcrItem(area, sb.toString().trim()));
+        }
+
+        out.sort((a, b) -> {
+            if (Math.abs(a.rect.top - b.rect.top) > 100) {
+                return Integer.compare(a.rect.top, b.rect.top);
+            }
+            return Integer.compare(b.rect.centerX(), a.rect.centerX());
+        });
+
+        return out;
+    }
+
+    private Rect rectOfItems(ArrayList<OcrItem> items) {
+        Rect r = new Rect(items.get(0).rect);
+        for (OcrItem item : items) {
+            r.union(item.rect);
+        }
+        return r;
     }
 
 private String cleanSource(String s) {
