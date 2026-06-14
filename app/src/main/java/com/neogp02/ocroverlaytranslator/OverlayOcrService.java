@@ -309,105 +309,28 @@ public class OverlayOcrService extends Service {
     
     
     
+    
     private void handleText(Text result, String lang) {
         if (result == null) return;
-
-        ArrayList<OcrItem> blocks = new ArrayList<>();
-
-        for (Text.TextBlock block : result.getTextBlocks()) {
-            Rect r = block.getBoundingBox();
-            String t = cleanSource(block.getText());
-
-            if (r == null) continue;
-            if (t.length() < 2) continue;
-            if (!containsJpOrZh(t)) continue;
-
-            blocks.add(new OcrItem(new Rect(r), t));
-        }
-
-        ArrayList<OcrItem> groups = mergeVerticalBlocks(blocks);
 
         overlay.removeAllViews();
         placedBoxes.clear();
 
         int count = 0;
 
-        for (OcrItem g : groups) {
-            addTextBox(g.rect, "[GROUP]\n" + g.text);
+        for (Text.TextBlock block : result.getTextBlocks()) {
+            Rect r = block.getBoundingBox();
+            String text = cleanSource(block.getText());
+
+            if (r == null) continue;
+            if (text.length() < 2) continue;
+            if (!containsJpOrZh(text)) continue;
+
+            addTextBox(r, "[BLOCK]\n" + text);
+
             count++;
-            if (count >= 12) break;
+            if (count >= 20) break;
         }
-    }
-
-    private ArrayList<OcrItem> mergeVerticalBlocks(ArrayList<OcrItem> blocks) {
-        ArrayList<ArrayList<OcrItem>> groups = new ArrayList<>();
-
-        // 오른쪽에서 왼쪽 순서로 정렬
-        blocks.sort((a, b) -> Integer.compare(b.rect.centerX(), a.rect.centerX()));
-
-        for (OcrItem b : blocks) {
-            boolean added = false;
-
-            for (ArrayList<OcrItem> g : groups) {
-                Rect gr = rectOfItems(g);
-
-                int gapX = Math.abs(gr.centerX() - b.rect.centerX());
-                int overlapY = Math.min(gr.bottom, b.rect.bottom) - Math.max(gr.top, b.rect.top);
-
-                boolean nearX = gapX < 85;
-                boolean sameHeight = overlapY > -80;
-
-                if (nearX && sameHeight) {
-                    g.add(b);
-                    added = true;
-                    break;
-                }
-            }
-
-            if (!added) {
-                ArrayList<OcrItem> ng = new ArrayList<>();
-                ng.add(b);
-                groups.add(ng);
-            }
-        }
-
-        ArrayList<OcrItem> result = new ArrayList<>();
-
-        for (ArrayList<OcrItem> g : groups) {
-            // 같은 말풍선 안에서는 오른쪽 열 -> 왼쪽 열 순서
-            g.sort((a, b) -> Integer.compare(b.rect.centerX(), a.rect.centerX()));
-
-            StringBuilder sb = new StringBuilder();
-            Rect area = rectOfItems(g);
-
-            for (OcrItem item : g) {
-                if (sb.length() > 0) sb.append("\n");
-                sb.append(item.text);
-            }
-
-            String text = sb.toString().trim();
-            if (text.length() == 0) continue;
-
-            result.add(new OcrItem(area, text));
-        }
-
-        // 화면상 위쪽부터, 같은 높이면 오른쪽부터
-        result.sort((a, b) -> {
-            if (Math.abs(a.rect.top - b.rect.top) > 120) {
-                return Integer.compare(a.rect.top, b.rect.top);
-            }
-            return Integer.compare(b.rect.centerX(), a.rect.centerX());
-        });
-
-        return result;
-    }
-
-    private Rect rectOfItems(ArrayList<OcrItem> items) {
-        Rect r = new Rect(items.get(0).rect);
-        for (OcrItem i : items) {
-            r.union(i.rect);
-        }
-        return r;
     }
 
 private String cleanSource(String s) {
@@ -594,6 +517,7 @@ private boolean containsJpOrZh(String s) {
     
     
     
+    
     private void addTextBox(Rect r, String text) {
         if (text == null) return;
 
@@ -602,20 +526,19 @@ private boolean containsJpOrZh(String s) {
 
         TextView tv = new TextView(this);
         tv.setText(text);
-        tv.setTextSize(10);
+        tv.setTextSize(9);
         tv.setTextColor(Color.WHITE);
-        tv.setBackgroundColor(0xDD000000);
-        tv.setPadding(6, 4, 6, 4);
-        tv.setMaxLines(10);
+        tv.setBackgroundColor(0xCC000000);
+        tv.setPadding(5, 3, 5, 3);
+        tv.setMaxLines(12);
 
         DisplayMetrics dm = getResources().getDisplayMetrics();
 
-        int w = Math.max(70, r.width() + 35);
-        int h = Math.max(55, r.height() + 30);
+        int w = Math.max(65, r.width() + 25);
+        int h = Math.max(50, r.height() + 20);
 
-        // 너무 큰 박스 방지
-        if (w > 150) w = 150;
-        if (h > 150) h = 150;
+        if (w > 145) w = 145;
+        if (h > 145) h = 145;
 
         int x = Math.max(0, r.left - 3);
         int y = Math.max(0, r.top - 3);
@@ -628,22 +551,11 @@ private boolean containsJpOrZh(String s) {
             y = Math.max(0, dm.heightPixels - h - 3);
         }
 
-        Rect newBox = new Rect(x, y, x + w, y + h);
-
-        // 겹침 제거는 유지하되 여유는 작게
-        for (Rect old : placedBoxes) {
-            Rect padded = new Rect(old.left - 2, old.top - 2, old.right + 2, old.bottom + 2);
-            if (Rect.intersects(newBox, padded)) {
-                return;
-            }
-        }
-
         FrameLayout.LayoutParams fp = new FrameLayout.LayoutParams(w, h);
         fp.leftMargin = x;
         fp.topMargin = y;
 
         overlay.addView(tv, fp);
-        placedBoxes.add(newBox);
     }
 
 @Override
