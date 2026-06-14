@@ -448,7 +448,23 @@ private void showStatus(String msg) {
             String text = orderLineGroupText(g);
 
             if (text.trim().length() > 0) {
-                out.add(new OcrItem(r, text.trim()));
+                StringBuilder dbg = new StringBuilder();
+                dbg.append(text.trim()).append("\n");
+
+                dbg.append("---- members ----\n");
+                for (OcrItem m : g) {
+                    dbg.append("L=").append(m.rect.left)
+                            .append(" T=").append(m.rect.top)
+                            .append(" R=").append(m.rect.right)
+                            .append(" B=").append(m.rect.bottom)
+                            .append(" W=").append(m.rect.width())
+                            .append(" H=").append(m.rect.height())
+                            .append(" :: ")
+                            .append(m.text)
+                            .append("\n");
+                }
+
+                out.add(new OcrItem(r, dbg.toString().trim()));
             }
         }
 
