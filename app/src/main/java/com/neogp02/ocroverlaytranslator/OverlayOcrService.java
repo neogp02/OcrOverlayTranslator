@@ -297,29 +297,31 @@ public class OverlayOcrService extends Service {
 
     
     
+    
     private void handleText(Text result, String lang) {
         if (result == null) return;
 
         ArrayList<OcrItem> items = new ArrayList<>();
 
         for (Text.TextBlock block : result.getTextBlocks()) {
-            Rect r = block.getBoundingBox();
-            String src = cleanSource(block.getText());
+            for (Text.Line line : block.getLines()) {
+                for (Text.Element element : line.getElements()) {
+                    Rect r = element.getBoundingBox();
+                    String src = cleanSource(element.getText());
 
-            if (r == null) continue;
+                    if (r == null) continue;
 
-            String compact = src.replace("\n", "").replace(" ", "").replace("　", "").trim();
-            if (compact.length() < 3) continue;
+                    String compact = src.replace("\n", "").replace(" ", "").replace("　", "").trim();
+                    if (compact.length() < 1) continue;
 
-            if (!containsJpOrZh(src)) continue;
+                    if (!containsJpOrZh(src)) continue;
 
-            String onlyNoise = src.replace("\\n", "").replace(" ", "").replace("　", "");
-            if (onlyNoise.matches("[0-9０-９一二三四五六七八九十]+")) continue;
-            if (src.matches("[0-9!?！？♡☆★・…\\s]+")) continue;
-            if (r.width() < 18 || r.height() < 18) continue;
+                    // 너무 작은 잡점 제거
+                    if (r.width() < 6 || r.height() < 6) continue;
 
-            Rect rr = new Rect(r.left / 2, r.top / 2, r.right / 2, r.bottom / 2);
-            items.add(new OcrItem(rr, src));
+                    items.add(new OcrItem(new Rect(r), src));
+                }
+            }
         }
 
         if (items.size() == 0) {
@@ -328,7 +330,7 @@ public class OverlayOcrService extends Service {
             return;
         }
 
-        ArrayList<OcrItem> groups = groupOcrItems(items);
+        ArrayList<OcrItem> groups = groupVerticalItems(items);
 
         StringBuilder keyBuilder = new StringBuilder(lang);
         for (OcrItem g : groups) keyBuilder.append("|").append(g.text);
@@ -341,114 +343,151 @@ public class OverlayOcrService extends Service {
         placedBoxes.clear();
 
         int count = 0;
+
         for (OcrItem g : groups) {
-            String compactGroup = g.text.replace("\n", "").replace(" ", "").replace("　", "").trim();
-            if (compactGroup.length() < 3) continue;
+            String compact = g.text.replace("\n", "").replace(" ", "").replace("　", "").trim();
+            if (compact.length() < 3) continue;
 
             translateAndAdd(g.rect, g.text, lang);
+
             count++;
             if (count >= 4) break;
         }
     }
 
-    private ArrayList<OcrItem> groupOcrItems(ArrayList<OcrItem> items) {
-        ArrayList<OcrItem> result = new ArrayList<>();
-        boolean[] used = new boolean[items.size()];
+    private ArrayList<OcrItem> groupVerticalItems(ArrayList<OcrItem> items) {
+        ArrayList<ArrayList<OcrItem>> columns = new ArrayList<>();
 
-        for (int i = 0; i < items.size(); i++) {
-            if (used[i]) continue;
+        // 1. x좌표가 가까운 것끼리 같은 세로 열로 묶음
+        for (OcrItem item : items) {
+            boolean added = false;
 
-            Rect base = new Rect(items.get(i).rect);
-            ArrayList<OcrItem> group = new ArrayList<>();
-            group.add(items.get(i));
-            used[i] = true;
+            for (ArrayList<OcrItem> col : columns) {
+                int avgX = 0;
+                for (OcrItem c : col) avgX += c.rect.centerX();
+                avgX /= col.size();
+
+                if (Math.abs(avgX - item.rect.centerX()) < 28) {
+                    col.add(item);
+                    added = true;
+                    break;
+                }
+            }
+
+            if (!added) {
+                ArrayList<OcrItem> col = new ArrayList<>();
+                col.add(item);
+                columns.add(col);
+            }
+        }
+
+        // 2. 열 내부는 위 -> 아래
+        for (ArrayList<OcrItem> col : columns) {
+            col.sort((a, b) -> Integer.compare(a.rect.top, b.rect.top));
+        }
+
+        // 3. 열은 오른쪽 -> 왼쪽
+        columns.sort((a, b) -> {
+            int ax = 0;
+            int bx = 0;
+            for (OcrItem i : a) ax += i.rect.centerX();
+            for (OcrItem i : b) bx += i.rect.centerX();
+            ax /= a.size();
+            bx /= b.size();
+            return Integer.compare(bx, ax);
+        });
+
+        ArrayList<OcrItem> groups = new ArrayList<>();
+        boolean[] usedCol = new boolean[columns.size()];
+
+        // 4. 가까운 열끼리 하나의 말풍선 그룹으로 병합
+        for (int i = 0; i < columns.size(); i++) {
+            if (usedCol[i]) continue;
+
+            ArrayList<ArrayList<OcrItem>> groupCols = new ArrayList<>();
+            groupCols.add(columns.get(i));
+            usedCol[i] = true;
+
+            Rect base = rectOfColumn(columns.get(i));
 
             boolean changed = true;
             while (changed) {
                 changed = false;
 
-                for (int j = 0; j < items.size(); j++) {
-                    if (used[j]) continue;
+                for (int j = 0; j < columns.size(); j++) {
+                    if (usedCol[j]) continue;
 
-                    Rect r = items.get(j).rect;
+                    Rect r = rectOfColumn(columns.get(j));
 
                     int gapX = Math.max(0, Math.max(base.left, r.left) - Math.min(base.right, r.right));
-                    int gapY = Math.max(0, Math.max(base.top, r.top) - Math.min(base.bottom, r.bottom));
+                    int overlapY = Math.min(base.bottom, r.bottom) - Math.max(base.top, r.top);
 
-                    boolean nearVerticalColumn =
-                            Math.abs(base.centerX() - r.centerX()) < 90 && gapY < 140;
-
-                    boolean nearHorizontalLine =
-                            Math.abs(base.centerY() - r.centerY()) < 70 && gapX < 160;
-
-                    boolean insideNearby =
-                            gapX < 80 && gapY < 120;
-
-                    if (nearVerticalColumn || nearHorizontalLine || insideNearby) {
-                        group.add(items.get(j));
+                    // 같은 말풍선 안의 옆 열이라고 판단
+                    if (gapX < 80 && overlapY > -40) {
+                        groupCols.add(columns.get(j));
                         base.union(r);
-                        used[j] = true;
+                        usedCol[j] = true;
                         changed = true;
                     }
                 }
             }
 
-            String merged = mergeGroupText(group);
-            String compactMerged = merged.replace("\n", "").replace(" ", "").replace("　", "").trim();
-            if (compactMerged.length() >= 3) {
-                result.add(new OcrItem(base, merged));
+            // 그룹 내부 열도 다시 오른쪽 -> 왼쪽
+            groupCols.sort((a, b) -> {
+                int ax = avgX(a);
+                int bx = avgX(b);
+                return Integer.compare(bx, ax);
+            });
+
+            StringBuilder sb = new StringBuilder();
+            Rect area = null;
+
+            for (ArrayList<OcrItem> col : groupCols) {
+                col.sort((a, b) -> Integer.compare(a.rect.top, b.rect.top));
+
+                StringBuilder colText = new StringBuilder();
+                for (OcrItem item : col) {
+                    colText.append(cleanSource(item.text));
+                }
+
+                if (sb.length() > 0) sb.append("\n");
+                sb.append(colText.toString());
+
+                Rect cr = rectOfColumn(col);
+                if (area == null) area = new Rect(cr);
+                else area.union(cr);
+            }
+
+            String text = sb.toString().trim();
+
+            if (area != null && text.length() > 0) {
+                groups.add(new OcrItem(area, text));
             }
         }
 
-        result.sort((a, b) -> {
+        // 화면상 위쪽 그룹부터 표시
+        groups.sort((a, b) -> {
             int dy = Integer.compare(a.rect.top, b.rect.top);
             if (dy != 0) return dy;
-            return Integer.compare(a.rect.left, b.rect.left);
+            return Integer.compare(b.rect.right, a.rect.right);
         });
 
-        return result;
+        return groups;
     }
 
-    private String mergeGroupText(ArrayList<OcrItem> group) {
-        if (group.size() == 0) return "";
-
-        Rect area = new Rect(group.get(0).rect);
-        for (OcrItem item : group) area.union(item.rect);
-
-        boolean vertical = area.height() > area.width() * 1.15f;
-
-        if (vertical) {
-            group.sort((a, b) -> {
-                int dx = Integer.compare(a.rect.left, b.rect.left);
-                if (Math.abs(a.rect.left - b.rect.left) > 40) return dx;
-                return Integer.compare(a.rect.top, b.rect.top);
-            });
-        } else {
-            group.sort((a, b) -> {
-                int dy = Integer.compare(a.rect.top, b.rect.top);
-                if (Math.abs(a.rect.top - b.rect.top) > 35) return dy;
-                return Integer.compare(a.rect.left, b.rect.left);
-            });
-        }
-
-        StringBuilder sb = new StringBuilder();
-        for (OcrItem item : group) {
-            String t = cleanSource(item.text);
-            if (t.length() == 0) continue;
-
-            if (vertical) {
-                sb.append(t.replace("\n", ""));
-            } else {
-                if (sb.length() > 0) sb.append("\n");
-                sb.append(t);
-            }
-        }
-
-        return sb.toString().trim();
+    private int avgX(ArrayList<OcrItem> col) {
+        int x = 0;
+        for (OcrItem i : col) x += i.rect.centerX();
+        return x / Math.max(1, col.size());
     }
 
+    private Rect rectOfColumn(ArrayList<OcrItem> col) {
+        Rect r = new Rect(col.get(0).rect);
+        for (OcrItem i : col) r.union(i.rect);
+        return r;
+    }
 
-    private String cleanSource(String s) {
+private String cleanSource(String s) {
         if (s == null) return "";
         return s
                 .replace("|", "")
