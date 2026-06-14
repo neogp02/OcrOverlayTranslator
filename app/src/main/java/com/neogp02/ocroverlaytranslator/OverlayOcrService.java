@@ -397,6 +397,7 @@ panel.append("[")
     
     
     private void addBottomPanel(String text) {
+        text = text.replace("\\n", "\n");
         TextView tv = new TextView(this);
         tv.setText(text);
         tv.setTextSize(10);
