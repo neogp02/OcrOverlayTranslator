@@ -499,4 +499,31 @@ public class OverlayOcrService extends Service {
     public IBinder onBind(Intent intent) {
         return null;
     }
+
+
+    private String cleanSource(String s) {
+        if (s == null) return "";
+
+        return s
+                .replace(" ", "")
+                .replace("\n", "")
+                .trim();
+    }
+
+    private boolean containsJpOrZh(String s) {
+        if (s == null) return false;
+
+        for (char c : s.toCharArray()) {
+
+            if ((c >= 0x3040 && c <= 0x30FF) ||
+                (c >= 0x4E00 && c <= 0x9FFF)) {
+
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+
 }
