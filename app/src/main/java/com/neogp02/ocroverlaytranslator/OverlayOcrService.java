@@ -499,6 +499,15 @@ public class OverlayOcrService extends Service {
         return columns;
     }
 
+
+    private Rect rectOfItems(ArrayList<OcrItem> items) {
+        Rect r = new Rect(items.get(0).rect);
+        for (OcrItem item : items) {
+            r.union(item.rect);
+        }
+        return r;
+    }
+
 private String cleanSource(String s) {
         if (s == null) return "";
         return s
