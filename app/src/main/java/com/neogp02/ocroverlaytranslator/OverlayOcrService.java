@@ -26,6 +26,7 @@ import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.ArrayDeque;
+import java.io.FileOutputStream;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -308,6 +309,15 @@ public class OverlayOcrService extends Service {
 
         Log.d("MLKIT_RAW", "================ RAW OCR START ================");
         Log.d("MLKIT_RAW", result.getText());
+
+        try {
+            FileOutputStream fos = openFileOutput("mlkit_ocr_log.txt", MODE_APPEND);
+            String dump = "\n===== RAW OCR =====\n" + result.getText() + "\n";
+            fos.write(dump.getBytes());
+            fos.close();
+        } catch (Exception e) {
+            Log.e("MLKIT_RAW", "file write failed", e);
+        }
         Log.d("MLKIT_RAW", "================ RAW OCR END ==================");
 
         for (Text.TextBlock block : result.getTextBlocks()) {
