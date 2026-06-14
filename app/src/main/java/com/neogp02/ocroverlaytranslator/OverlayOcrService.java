@@ -132,13 +132,16 @@ public class OverlayOcrService extends Service {
         wm = (WindowManager)getSystemService(WINDOW_SERVICE);
 
         overlay = new FrameLayout(this);
+        overlay.setClickable(false);
+        overlay.setFocusable(false);
+        overlay.setEnabled(false);
         overlay.setBackgroundColor(Color.TRANSPARENT);
 
         WindowManager.LayoutParams lp = new WindowManager.LayoutParams(
                 WindowManager.LayoutParams.MATCH_PARENT,
                 WindowManager.LayoutParams.MATCH_PARENT,
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE |
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE |
                         0 |
                         WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
                 PixelFormat.TRANSLUCENT
@@ -146,7 +149,7 @@ public class OverlayOcrService extends Service {
 
         
         lp.flags =
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
                 | WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
                 | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS;
 
@@ -161,7 +164,7 @@ public class OverlayOcrService extends Service {
         tv.setText(msg);
         tv.setTextSize(16);
         tv.setTextColor(Color.WHITE);
-        tv.setBackgroundColor(0xCC000000);
+        tv.setBackgroundColor(0x66000000);
         tv.setPadding(16, 8, 16, 8);
 
         FrameLayout.LayoutParams fp = new FrameLayout.LayoutParams(
@@ -373,7 +376,7 @@ public class OverlayOcrService extends Service {
         tv.setTextSize(10);
         tv.setTextColor(Color.WHITE);
         tv.setGravity(Gravity.CENTER);
-        tv.setBackgroundColor(0xDD000000);
+        tv.setBackgroundColor(0x66000000);
         tv.setPadding(2, 1, 2, 1);
 
         int size = 24;
@@ -402,7 +405,7 @@ public class OverlayOcrService extends Service {
         tv.setText(text);
         tv.setTextSize(10);
         tv.setTextColor(Color.WHITE);
-        tv.setBackgroundColor(0xCC000000);
+        tv.setBackgroundColor(0x66000000);
         tv.setPadding(12, 10, 12, 10);
         tv.setMaxLines(8);
         tv.setSingleLine(false);
@@ -448,7 +451,7 @@ public class OverlayOcrService extends Service {
         tv.setText(text);
         tv.setTextSize(6);
         tv.setTextColor(Color.WHITE);
-        tv.setBackgroundColor(0xCC000000);
+        tv.setBackgroundColor(0x66000000);
         tv.setPadding(3, 2, 3, 2);
         tv.setSingleLine(false);
         tv.setMaxLines(20);
