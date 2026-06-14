@@ -328,29 +328,32 @@ private void showStatus(String msg) {
     
     
     
+    
     private void handleText(Text result, String lang) {
         if (result == null) return;
 
-        ArrayList<OcrItem> lines = new ArrayList<>();
+        ArrayList<OcrItem> elems = new ArrayList<>();
 
         for (Text.TextBlock block : result.getTextBlocks()) {
             for (Text.Line line : block.getLines()) {
-                Rect r = line.getBoundingBox();
-                String text = cleanSourceKeepLines(line.getText());
+                for (Text.Element el : line.getElements()) {
+                    Rect r = el.getBoundingBox();
+                    String text = cleanSourceKeepLines(el.getText());
 
-                if (r == null) continue;
-                if (text.length() < 2) continue;
-                if (!containsJpOrZh(text)) continue;
+                    if (r == null) continue;
+                    if (text.length() < 1) continue;
+                    if (!containsJpOrZh(text)) continue;
 
-                Rect rr = new Rect(r.left / 2, r.top / 2, r.right / 2, r.bottom / 2);
-                lines.add(new OcrItem(rr, text));
+                    Rect rr = new Rect(r.left / 2, r.top / 2, r.right / 2, r.bottom / 2);
+                    elems.add(new OcrItem(rr, text));
+                }
             }
         }
 
-        ArrayList<OcrItem> groups = groupLinesByXYStart(lines);
+        ArrayList<OcrItem> groups = groupElementsForBubbles(elems);
 
         groups.sort((a, b) -> {
-            if (Math.abs(a.rect.top - b.rect.top) > 90) {
+            if (Math.abs(a.rect.top - b.rect.top) > 70) {
                 return Integer.compare(a.rect.top, b.rect.top);
             }
             return Integer.compare(b.rect.centerX(), a.rect.centerX());
@@ -361,10 +364,11 @@ private void showStatus(String msg) {
 
         StringBuilder panel = new StringBuilder();
 
-        int max = Math.min(groups.size(), 50);
+        int max = Math.min(groups.size(), 60);
 
         for (int i = 0; i < max; i++) {
             OcrItem it = groups.get(i);
+
             panel.append("[")
                     .append(i + 1)
                     .append("] ")
@@ -382,9 +386,7 @@ private void showStatus(String msg) {
         addBottomPanel(panel.toString());
     }
 
-    
-    
-    
+
     private ArrayList<OcrItem> groupLinesByXYStart(ArrayList<OcrItem> lines) {
         ArrayList<ArrayList<OcrItem>> groups = new ArrayList<>();
 
