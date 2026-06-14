@@ -307,36 +307,77 @@ public class OverlayOcrService extends Service {
     
     
     
+    
     private void handleText(Text result, String lang) {
         if (result == null) return;
 
         StringBuilder sb = new StringBuilder();
-        sb.append("[ML KIT BLOCK + BOX TEST]\n\n");
+        sb.append("[ML KIT ELEMENT TEST]\n\n");
 
-        int index = 1;
+        int bIndex = 1;
 
         for (Text.TextBlock block : result.getTextBlocks()) {
-            Rect r = block.getBoundingBox();
+            Rect br = block.getBoundingBox();
 
             sb.append("===== BLOCK ");
-            sb.append(index++);
+            sb.append(bIndex++);
             sb.append(" =====\n");
 
-            if (r != null) {
-                sb.append("BOX: ");
-                sb.append("L=").append(r.left);
-                sb.append(" T=").append(r.top);
-                sb.append(" R=").append(r.right);
-                sb.append(" B=").append(r.bottom);
-                sb.append(" W=").append(r.width());
-                sb.append(" H=").append(r.height());
-                sb.append("\n");
-            } else {
-                sb.append("BOX: null\n");
+            if (br != null) {
+                sb.append("BBOX L=").append(br.left)
+                        .append(" T=").append(br.top)
+                        .append(" R=").append(br.right)
+                        .append(" B=").append(br.bottom)
+                        .append(" W=").append(br.width())
+                        .append(" H=").append(br.height())
+                        .append("\n");
             }
 
-            sb.append(block.getText());
-            sb.append("\n\n");
+            int lIndex = 1;
+
+            for (Text.Line line : block.getLines()) {
+                Rect lr = line.getBoundingBox();
+
+                sb.append("  -- LINE ");
+                sb.append(lIndex++);
+                sb.append(" -- ");
+
+                if (lr != null) {
+                    sb.append("L=").append(lr.left)
+                            .append(" T=").append(lr.top)
+                            .append(" R=").append(lr.right)
+                            .append(" B=").append(lr.bottom)
+                            .append(" W=").append(lr.width())
+                            .append(" H=").append(lr.height())
+                            .append(" : ");
+                }
+
+                sb.append(line.getText()).append("\n");
+
+                int eIndex = 1;
+
+                for (Text.Element element : line.getElements()) {
+                    Rect er = element.getBoundingBox();
+
+                    sb.append("      E");
+                    sb.append(eIndex++);
+                    sb.append(" ");
+
+                    if (er != null) {
+                        sb.append("L=").append(er.left)
+                                .append(" T=").append(er.top)
+                                .append(" R=").append(er.right)
+                                .append(" B=").append(er.bottom)
+                                .append(" W=").append(er.width())
+                                .append(" H=").append(er.height())
+                                .append(" : ");
+                    }
+
+                    sb.append(element.getText()).append("\n");
+                }
+            }
+
+            sb.append("\n");
         }
 
         overlay.removeAllViews();
@@ -344,11 +385,11 @@ public class OverlayOcrService extends Service {
 
         TextView tv = new TextView(this);
         tv.setText(sb.toString());
-        tv.setTextSize(10);
+        tv.setTextSize(8);
         tv.setTextColor(Color.WHITE);
         tv.setBackgroundColor(0xDD000000);
-        tv.setPadding(10, 10, 10, 10);
-        tv.setMaxLines(80);
+        tv.setPadding(8, 8, 8, 8);
+        tv.setMaxLines(120);
 
         DisplayMetrics dm = getResources().getDisplayMetrics();
 
@@ -359,7 +400,7 @@ public class OverlayOcrService extends Service {
                 );
 
         lp.leftMargin = 10;
-        lp.topMargin = 60;
+        lp.topMargin = 45;
 
         overlay.addView(tv, lp);
     }
