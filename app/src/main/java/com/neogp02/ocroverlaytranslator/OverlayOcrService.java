@@ -330,10 +330,6 @@ if (lastScreenBitmap != null && rr.right > lastScreenBitmap.getWidth()) {
     rr = new Rect(r.left / 2, r.top / 2, r.right / 2, r.bottom / 2);
 }
 
-// 하얀 말풍선 내부가 아니면 제외
-Rect bubbleCheck = findWhiteBubbleRect(rr);
-if (bubbleCheck == null) continue;
-
 items.add(new OcrItem(rr, src));
                 }
             }
@@ -369,7 +365,9 @@ items.add(new OcrItem(rr, src));
             if (compactText.length() > 70) continue;
 
             Rect bubbleRect = findWhiteBubbleRect(g.rect);
-            if (bubbleRect == null) continue;
+            if (bubbleRect == null) {
+                bubbleRect = g.rect;
+            }
 
             translateAndAdd(bubbleRect, g.text, lang);
 
@@ -539,8 +537,8 @@ private boolean containsJpOrZh(String s) {
             if (r.width() < 25 || r.height() < 25) continue;
 
             // 페이지 배경처럼 너무 큰 영역 제외
-            if (r.width() > bw * 0.55f || r.height() > bh * 0.45f) continue;
-            if (area > bw * bh * 0.20f) continue;
+            if (r.width() > bw * 0.70f || r.height() > bh * 0.55f) continue;
+            if (area > bw * bh * 0.30f) continue;
 
             // OCR 글자 영역을 포함하지 않으면 제외
             if (!Rect.intersects(r, textRect)) continue;
@@ -571,7 +569,7 @@ private boolean containsJpOrZh(String s) {
         int max = Math.max(r, Math.max(g, b));
         int min = Math.min(r, Math.min(g, b));
 
-        return max > 215 && min > 190 && (max - min) < 45;
+        return max > 200 && min > 170 && (max - min) < 65;
     }
 
     private Rect floodWhiteRegion(int sx, int sy) {
@@ -648,6 +646,9 @@ private boolean containsJpOrZh(String s) {
 
         int w = Math.max(55, r.width());
         int h = Math.max(45, r.height());
+
+        if (w > 180) w = 180;
+        if (h > 180) h = 180;
 
         if (w < 90 || h < 80) {
             tv.setTextSize(9);
