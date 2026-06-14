@@ -364,10 +364,18 @@ private void showStatus(String msg) {
         int max = Math.min(groups.size(), 50);
 
         for (int i = 0; i < max; i++) {
+            OcrItem it = groups.get(i);
             panel.append("[")
                     .append(i + 1)
-                    .append("]\n")
-                    .append(groups.get(i).text)
+                    .append("] ")
+                    .append("L=").append(it.rect.left)
+                    .append(" T=").append(it.rect.top)
+                    .append(" R=").append(it.rect.right)
+                    .append(" B=").append(it.rect.bottom)
+                    .append(" W=").append(it.rect.width())
+                    .append(" H=").append(it.rect.height())
+                    .append("\n")
+                    .append(it.text)
                     .append("\n\n");
         }
 
