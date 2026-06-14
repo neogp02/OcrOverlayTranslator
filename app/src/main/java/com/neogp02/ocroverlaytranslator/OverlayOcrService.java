@@ -354,7 +354,7 @@ private void showStatus(String msg) {
         for (OcrItem item : items) {
 panel.append("[")
                     .append(index)
-                    .append("]\\n")
+                    .append("]\n")
                     .append(item.text)
                     .append("\n\n");
 
