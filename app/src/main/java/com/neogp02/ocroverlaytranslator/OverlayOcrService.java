@@ -24,6 +24,7 @@ import com.google.mlkit.vision.text.chinese.ChineseTextRecognizerOptions;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -56,6 +57,7 @@ public class OverlayOcrService extends Service {
 
     private final Map<String, String> cache = new HashMap<>();
     private String lastKey = "";
+    private Bitmap lastScreenBitmap;
     private final List<Rect> placedBoxes = new ArrayList<>();
 
     @Override
@@ -245,6 +247,8 @@ public class OverlayOcrService extends Service {
                 bitmap = Bitmap.createBitmap(bitmap, 0, 0, width, height);
             }
 
+            lastScreenBitmap = bitmap;
+
             Bitmap ocrBitmap = Bitmap.createScaledBitmap(
                     bitmap,
                     bitmap.getWidth() * 2,
@@ -319,7 +323,18 @@ public class OverlayOcrService extends Service {
                     // 너무 작은 잡점 제거
                     if (r.width() < 6 || r.height() < 6) continue;
 
-                    items.add(new OcrItem(new Rect(r), src));
+                    Rect rr = new Rect(r);
+
+// OCR이 2배 확대 좌표로 반환된 경우 보정
+if (lastScreenBitmap != null && rr.right > lastScreenBitmap.getWidth()) {
+    rr = new Rect(r.left / 2, r.top / 2, r.right / 2, r.bottom / 2);
+}
+
+// 하얀 말풍선 내부가 아니면 제외
+Rect bubbleCheck = findWhiteBubbleRect(rr);
+if (bubbleCheck == null) continue;
+
+items.add(new OcrItem(rr, src));
                 }
             }
         }
@@ -353,7 +368,10 @@ public class OverlayOcrService extends Service {
             String compactText = g.text.replace("\n", "").replace(" ", "").replace("　", "").trim();
             if (compactText.length() > 70) continue;
 
-            translateAndAdd(g.rect, g.text, lang);
+            Rect bubbleRect = findWhiteBubbleRect(g.rect);
+            if (bubbleRect == null) continue;
+
+            translateAndAdd(bubbleRect, g.text, lang);
 
             count++;
             if (count >= 12) break;
@@ -483,12 +501,137 @@ private boolean containsJpOrZh(String s) {
     }
 
     
+
+    private Rect findWhiteBubbleRect(Rect textRect) {
+        if (lastScreenBitmap == null || textRect == null) return null;
+
+        int bw = lastScreenBitmap.getWidth();
+        int bh = lastScreenBitmap.getHeight();
+
+        int cx = Math.max(0, Math.min(bw - 1, textRect.centerX()));
+        int cy = Math.max(0, Math.min(bh - 1, textRect.centerY()));
+
+        int[][] seeds = new int[][] {
+                {cx, cy},
+                {textRect.left - 4, cy},
+                {textRect.right + 4, cy},
+                {cx, textRect.top - 4},
+                {cx, textRect.bottom + 4},
+                {textRect.left - 8, textRect.top - 8},
+                {textRect.right + 8, textRect.bottom + 8}
+        };
+
+        Rect best = null;
+
+        for (int[] seed : seeds) {
+            int sx = Math.max(0, Math.min(bw - 1, seed[0]));
+            int sy = Math.max(0, Math.min(bh - 1, seed[1]));
+
+            if (!isWhiteLike(sx, sy)) continue;
+
+            Rect r = floodWhiteRegion(sx, sy);
+
+            if (r == null) continue;
+
+            int area = r.width() * r.height();
+
+            // 너무 작은 영역 제외
+            if (r.width() < 25 || r.height() < 25) continue;
+
+            // 페이지 배경처럼 너무 큰 영역 제외
+            if (r.width() > bw * 0.55f || r.height() > bh * 0.45f) continue;
+            if (area > bw * bh * 0.20f) continue;
+
+            // OCR 글자 영역을 포함하지 않으면 제외
+            if (!Rect.intersects(r, textRect)) continue;
+
+            if (best == null || area > best.width() * best.height()) {
+                best = r;
+            }
+        }
+
+        if (best == null) return null;
+
+        // 말풍선 테두리 안쪽만 쓰도록 약간 축소
+        best.left = Math.max(0, best.left + 2);
+        best.top = Math.max(0, best.top + 2);
+        best.right = Math.min(bw, best.right - 2);
+        best.bottom = Math.min(bh, best.bottom - 2);
+
+        return best;
+    }
+
+    private boolean isWhiteLike(int x, int y) {
+        int c = lastScreenBitmap.getPixel(x, y);
+
+        int r = Color.red(c);
+        int g = Color.green(c);
+        int b = Color.blue(c);
+
+        int max = Math.max(r, Math.max(g, b));
+        int min = Math.min(r, Math.min(g, b));
+
+        return max > 215 && min > 190 && (max - min) < 45;
+    }
+
+    private Rect floodWhiteRegion(int sx, int sy) {
+        int bw = lastScreenBitmap.getWidth();
+        int bh = lastScreenBitmap.getHeight();
+
+        boolean[] visited = new boolean[bw * bh];
+        ArrayDeque<int[]> q = new ArrayDeque<>();
+
+        q.add(new int[]{sx, sy});
+        visited[sy * bw + sx] = true;
+
+        int minX = sx, maxX = sx, minY = sy, maxY = sy;
+        int count = 0;
+        int limit = Math.max(8000, bw * bh / 8);
+
+        while (!q.isEmpty()) {
+            int[] p = q.poll();
+            int x = p[0];
+            int y = p[1];
+
+            count++;
+            if (count > limit) return null;
+
+            if (x < minX) minX = x;
+            if (x > maxX) maxX = x;
+            if (y < minY) minY = y;
+            if (y > maxY) maxY = y;
+
+            int[][] dirs = new int[][] {
+                    {1,0}, {-1,0}, {0,1}, {0,-1}
+            };
+
+            for (int[] d : dirs) {
+                int nx = x + d[0];
+                int ny = y + d[1];
+
+                if (nx < 0 || ny < 0 || nx >= bw || ny >= bh) continue;
+
+                int idx = ny * bw + nx;
+                if (visited[idx]) continue;
+
+                visited[idx] = true;
+
+                if (isWhiteLike(nx, ny)) {
+                    q.add(new int[]{nx, ny});
+                }
+            }
+        }
+
+        return new Rect(minX, minY, maxX + 1, maxY + 1);
+    }
+
     private void translateAndAdd(Rect r, String src, String lang) {
         String out = "[OCR]\n" + src;
         addTextBox(r, out);
     }
 
 
+    
     
     private void addTextBox(Rect r, String text) {
         if (text == null) return;
@@ -498,46 +641,43 @@ private boolean containsJpOrZh(String s) {
 
         TextView tv = new TextView(this);
         tv.setText(text);
-        tv.setTextSize(11);
         tv.setTextColor(Color.WHITE);
-        tv.setBackgroundColor(0xDD000000);
-        tv.setPadding(7, 4, 7, 4);
+        tv.setBackgroundColor(0xCC000000);
+        tv.setPadding(5, 3, 5, 3);
         tv.setMaxLines(8);
+
+        int w = Math.max(55, r.width());
+        int h = Math.max(45, r.height());
+
+        if (w < 90 || h < 80) {
+            tv.setTextSize(9);
+        } else {
+            tv.setTextSize(10);
+        }
 
         DisplayMetrics dm = getResources().getDisplayMetrics();
 
-        int boxW = Math.max(95, r.width() + 45);
-        int boxH = Math.max(60, r.height() + 45);
+        int x = Math.max(0, r.left);
+        int y = Math.max(0, r.top);
 
-        if (r.height() > r.width() * 1.3f) {
-            boxW = Math.max(85, r.width() + 35);
-            boxH = Math.max(70, r.height() + 35);
-            tv.setTextSize(10);
-            tv.setMaxLines(10);
+        if (x + w > dm.widthPixels) {
+            w = dm.widthPixels - x - 2;
         }
 
-        int x = Math.max(0, r.left - 4);
-        int y = Math.max(0, r.top - 4);
-
-        if (x + boxW > dm.widthPixels) {
-            x = Math.max(0, dm.widthPixels - boxW - 4);
+        if (y + h > dm.heightPixels) {
+            h = dm.heightPixels - y - 2;
         }
 
-        if (y + boxH > dm.heightPixels) {
-            y = Math.max(0, dm.heightPixels - boxH - 4);
-        }
+        Rect newBox = new Rect(x, y, x + w, y + h);
 
-        Rect newBox = new Rect(x, y, x + boxW, y + boxH);
-
-        // 이미 표시된 박스와 겹치면 이번 박스는 버림
         for (Rect old : placedBoxes) {
-            Rect padded = new Rect(old.left - 6, old.top - 6, old.right + 6, old.bottom + 6);
+            Rect padded = new Rect(old.left - 3, old.top - 3, old.right + 3, old.bottom + 3);
             if (Rect.intersects(newBox, padded)) {
                 return;
             }
         }
 
-        FrameLayout.LayoutParams fp = new FrameLayout.LayoutParams(boxW, boxH);
+        FrameLayout.LayoutParams fp = new FrameLayout.LayoutParams(w, h);
         fp.leftMargin = x;
         fp.topMargin = y;
 
