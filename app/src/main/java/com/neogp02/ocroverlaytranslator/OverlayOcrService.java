@@ -304,168 +304,41 @@ public class OverlayOcrService extends Service {
     
     
     
+    
     private void handleText(Text result, String lang) {
         if (result == null) return;
 
-        Log.d("MLKIT_RAW", "================ RAW OCR START ================");
-        Log.d("MLKIT_RAW", result.getText());
-
-        try {
-            FileOutputStream fos = openFileOutput("mlkit_ocr_log.txt", MODE_APPEND);
-            String dump = "\n===== RAW OCR =====\n" + result.getText() + "\n";
-            fos.write(dump.getBytes());
-            fos.close();
-        } catch (Exception e) {
-            Log.e("MLKIT_RAW", "file write failed", e);
-        }
-        Log.d("MLKIT_RAW", "================ RAW OCR END ==================");
-
-        for (Text.TextBlock block : result.getTextBlocks()) {
-            Log.d("MLKIT_BLOCK", "BLOCK=[" + block.getText() + "]");
-            for (Text.Line line : block.getLines()) {
-                Log.d("MLKIT_LINE", "LINE=[" + line.getText() + "]");
-                for (Text.Element element : line.getElements()) {
-                    Log.d("MLKIT_ELEMENT", "ELEMENT=[" + element.getText() + "] BOX=" + element.getBoundingBox());
-                }
-            }
-        }
-
-        ArrayList<OcrItem> items = new ArrayList<>();
-
-        for (Text.TextBlock block : result.getTextBlocks()) {
-            for (Text.Line line : block.getLines()) {
-                for (Text.Element element : line.getElements()) {
-                    Rect r = element.getBoundingBox();
-                    String src = cleanSource(element.getText());
-
-                    if (r == null) continue;
-
-                    String compact = src.replace("\n", "").replace(" ", "").replace("　", "").trim();
-                    if (compact.length() < 1) continue;
-
-                    if (!containsJpOrZh(src)) continue;
-
-                    // 너무 작은 잡점 제거
-                    if (r.width() < 6 || r.height() < 6) continue;
-
-                    Rect rr = new Rect(r);
-
-// OCR이 2배 확대 좌표로 반환된 경우 보정
-if (lastScreenBitmap != null && rr.right > lastScreenBitmap.getWidth()) {
-    rr = new Rect(r.left / 2, r.top / 2, r.right / 2, r.bottom / 2);
-}
-
-items.add(new OcrItem(rr, src));
-                }
-            }
-        }
-
-        if (items.size() == 0) {
-            overlay.removeAllViews();
-            placedBoxes.clear();
-            return;
-        }
-
-        ArrayList<OcrItem> groups = groupVerticalItems(items);
-
-        StringBuilder keyBuilder = new StringBuilder(lang);
-        for (OcrItem g : groups) keyBuilder.append("|").append(g.text);
-        String key = keyBuilder.toString();
-
-        if (key.equals(lastKey)) return;
-        lastKey = key;
+        String raw = result.getText();
 
         overlay.removeAllViews();
         placedBoxes.clear();
 
-        int count = 0;
-
-        for (OcrItem g : groups) {
-            String compact = g.text.replace("\n", "").replace(" ", "").replace("　", "").trim();
-            if (compact.length() < 3) continue;
-
-            if (isMostlyLatin(g.text)) continue;
-
-            String compactText = g.text.replace("\n", "").replace(" ", "").replace("　", "").trim();
-            if (compactText.length() > 70) continue;
-
-            translateAndAdd(g.rect, g.text, lang);
-
-            count++;
-            if (count >= 12) break;
-        }
+        showRawOcrDebug(raw);
     }
 
-    
-    private ArrayList<OcrItem> groupVerticalItems(ArrayList<OcrItem> items) {
-        ArrayList<ArrayList<OcrItem>> columns = new ArrayList<>();
+    private void showRawOcrDebug(String raw) {
+        if (raw == null) raw = "";
 
-        // x좌표가 가까운 글자만 같은 세로열로 묶음
-        for (OcrItem item : items) {
-            boolean added = false;
+        TextView tv = new TextView(this);
+        tv.setText("[ML KIT RAW OCR]\n" + raw);
+        tv.setTextSize(12);
+        tv.setTextColor(Color.WHITE);
+        tv.setBackgroundColor(0xDD000000);
+        tv.setPadding(12, 8, 12, 8);
+        tv.setMaxLines(35);
 
-            for (ArrayList<OcrItem> col : columns) {
-                int avgX = avgX(col);
+        DisplayMetrics dm = getResources().getDisplayMetrics();
 
-                if (Math.abs(avgX - item.rect.centerX()) < 24) {
-                    col.add(item);
-                    added = true;
-                    break;
-                }
-            }
+        FrameLayout.LayoutParams fp =
+                new FrameLayout.LayoutParams(
+                        dm.widthPixels - 30,
+                        FrameLayout.LayoutParams.WRAP_CONTENT
+                );
 
-            if (!added) {
-                ArrayList<OcrItem> col = new ArrayList<>();
-                col.add(item);
-                columns.add(col);
-            }
-        }
+        fp.leftMargin = 15;
+        fp.topMargin = 80;
 
-        ArrayList<OcrItem> groups = new ArrayList<>();
-
-        for (ArrayList<OcrItem> col : columns) {
-            col.sort((a, b) -> Integer.compare(a.rect.top, b.rect.top));
-
-            StringBuilder sb = new StringBuilder();
-            Rect area = rectOfColumn(col);
-
-            for (OcrItem item : col) {
-                String t = cleanSource(item.text);
-                if (t.length() == 0) continue;
-                sb.append(t);
-            }
-
-            String text = sb.toString().trim();
-            String compact = text.replace("\n", "").replace(" ", "").replace("　", "").trim();
-
-            if (compact.length() < 3) continue;
-            if (isMostlyLatin(compact)) continue;
-            if (compact.length() > 40) continue;
-
-            groups.add(new OcrItem(area, text));
-        }
-
-        // 위쪽부터, 같은 높이면 오른쪽부터
-        groups.sort((a, b) -> {
-            if (Math.abs(a.rect.top - b.rect.top) > 30) {
-                return Integer.compare(a.rect.top, b.rect.top);
-            }
-            return Integer.compare(b.rect.right, a.rect.right);
-        });
-
-        return groups;
-    }
-
-    private int avgX(ArrayList<OcrItem> col) {
-        int x = 0;
-        for (OcrItem i : col) x += i.rect.centerX();
-        return x / Math.max(1, col.size());
-    }
-
-    private Rect rectOfColumn(ArrayList<OcrItem> col) {
-        Rect r = new Rect(col.get(0).rect);
-        for (OcrItem i : col) r.union(i.rect);
-        return r;
+        overlay.addView(tv, fp);
     }
 
 private String cleanSource(String s) {
