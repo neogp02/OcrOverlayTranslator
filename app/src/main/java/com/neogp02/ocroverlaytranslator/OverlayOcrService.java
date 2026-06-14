@@ -326,6 +326,7 @@ private void showStatus(String msg) {
     
     
     
+    
     private void handleText(Text result, String lang) {
         if (result == null) return;
 
@@ -333,7 +334,9 @@ private void showStatus(String msg) {
 
         for (Text.TextBlock block : result.getTextBlocks()) {
             Rect r = block.getBoundingBox();
-            String text = cleanSource(orderedBlockText(block));
+
+            // 우선 ML Kit 원본 block text를 그대로 사용
+            String text = cleanSourceKeepLines(block.getText());
 
             if (r == null) continue;
             if (text.length() < 2) continue;
@@ -343,9 +346,8 @@ private void showStatus(String msg) {
             items.add(new OcrItem(rr, text));
         }
 
-        ArrayList<OcrItem> groups = groupPanelItemsLoose(items);
-
-        groups.sort((a, b) -> {
+        // 화면 읽기 순서: 위쪽 먼저, 같은 높이면 오른쪽 먼저
+        items.sort((a, b) -> {
             if (Math.abs(a.rect.top - b.rect.top) > 90) {
                 return Integer.compare(a.rect.top, b.rect.top);
             }
@@ -355,26 +357,21 @@ private void showStatus(String msg) {
         overlay.removeAllViews();
         placedBoxes.clear();
 
-        int max = Math.min(groups.size(), 25);
+        StringBuilder panel = new StringBuilder();
 
-        String[] srcs = new String[max];
-        String[] trans = new String[max];
-
-        for (int i = 0; i < max; i++) {
-            srcs[i] = groups.get(i).text;
-            trans[i] = "번역 중...";
-        }
-
-        addBottomPanel(buildPanelText(srcs, trans));
+        int max = Math.min(items.size(), 40);
 
         for (int i = 0; i < max; i++) {
-            final int idx = i;
-            translateForPanel(srcs[i], lang, translated -> {
-                trans[idx] = translated;
-                addBottomPanel(buildPanelText(srcs, trans));
-            });
+            panel.append("[")
+                    .append(i + 1)
+                    .append("]\n")
+                    .append(items.get(i).text)
+                    .append("\n\n");
         }
+
+        addBottomPanel(panel.toString());
     }
+
 
     private ArrayList<OcrItem> groupPanelItemsLoose(ArrayList<OcrItem> items) {
         ArrayList<ArrayList<OcrItem>> groups = new ArrayList<>();
@@ -781,6 +778,16 @@ private void addNumberMarker(Rect r, int number) {
         }
 
         return sb.toString();
+    }
+
+
+    private String cleanSourceKeepLines(String s) {
+        if (s == null) return "";
+
+        return s
+                .replace("\r", "")
+                .replace(" ", "")
+                .trim();
     }
 
 private String cleanSource(String s) {
