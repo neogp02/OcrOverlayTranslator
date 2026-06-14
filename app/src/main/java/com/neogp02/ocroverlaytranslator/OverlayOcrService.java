@@ -310,6 +310,7 @@ public class OverlayOcrService extends Service {
     
     
     
+    
     private void handleText(Text result, String lang) {
         if (result == null) return;
 
@@ -319,18 +320,29 @@ public class OverlayOcrService extends Service {
         int count = 0;
 
         for (Text.TextBlock block : result.getTextBlocks()) {
-            Rect r = block.getBoundingBox();
-            String text = cleanSource(block.getText());
+            for (Text.Line line : block.getLines()) {
+                Rect r = line.getBoundingBox();
+                String text = cleanSource(line.getText());
 
-            if (r == null) continue;
-            if (text.length() < 2) continue;
-            if (!containsJpOrZh(text)) continue;
+                if (r == null) continue;
+                if (text.length() < 2) continue;
+                if (!containsJpOrZh(text)) continue;
 
-            Rect rr = new Rect(r.left / 2, r.top / 2, r.right / 2, r.bottom / 2);
-            addTextBox(rr, text);
+                // OCR 이미지를 2배 확대해서 넣었으므로 좌표 /2 보정
+                Rect rr = new Rect(
+                        r.left / 2,
+                        r.top / 2,
+                        r.right / 2,
+                        r.bottom / 2
+                );
 
-            count++;
-            if (count >= 20) break;
+                addTextBox(rr, text);
+
+                count++;
+                if (count >= 35) break;
+            }
+
+            if (count >= 35) break;
         }
     }
 
@@ -520,6 +532,7 @@ private boolean containsJpOrZh(String s) {
     
     
     
+    
     private void addTextBox(Rect r, String text) {
         if (text == null) return;
 
@@ -531,17 +544,16 @@ private boolean containsJpOrZh(String s) {
         tv.setTextSize(8);
         tv.setTextColor(Color.WHITE);
         tv.setBackgroundColor(0xCC000000);
-        tv.setPadding(4, 3, 4, 3);
-        tv.setMaxLines(20);
+        tv.setPadding(3, 2, 3, 2);
+        tv.setMaxLines(8);
 
         DisplayMetrics dm = getResources().getDisplayMetrics();
 
-        int w = Math.max(55, r.width() + 20);
-        int h = Math.max(45, r.height() + 25);
+        int w = Math.max(42, r.width() + 18);
+        int h = Math.max(36, r.height() + 18);
 
-        // 너무 작게 잘리는 문제 완화
-        if (w > 170) w = 170;
-        if (h > 260) h = 260;
+        if (w > 120) w = 120;
+        if (h > 180) h = 180;
 
         int x = Math.max(0, r.left - 2);
         int y = Math.max(0, r.top - 2);
