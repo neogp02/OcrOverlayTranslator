@@ -356,7 +356,7 @@ panel.append("[")
                     .append(index)
                     .append("]\\n")
                     .append(item.text)
-                    .append("\\n\\n");
+                    .append("\n\n");
 
             index++;
             if (index > 25) break;
