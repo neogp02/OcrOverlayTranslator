@@ -348,6 +348,11 @@ public class OverlayOcrService extends Service {
             String compact = g.text.replace("\n", "").replace(" ", "").replace("　", "").trim();
             if (compact.length() < 3) continue;
 
+            if (isMostlyLatin(g.text)) continue;
+
+            String compactText = g.text.replace("\n", "").replace(" ", "").replace("　", "").trim();
+            if (compactText.length() > 70) continue;
+
             translateAndAdd(g.rect, g.text, lang);
 
             count++;
@@ -423,7 +428,7 @@ public class OverlayOcrService extends Service {
                     int overlapY = Math.min(base.bottom, r.bottom) - Math.max(base.top, r.top);
 
                     // 같은 말풍선 안의 옆 열이라고 판단
-                    if (gapX < 80 && overlapY > -40) {
+                    if (gapX < 35 && overlapY > 10) {
                         groupCols.add(columns.get(j));
                         base.union(r);
                         usedCol[j] = true;
@@ -514,6 +519,29 @@ private boolean containsJpOrZh(String s) {
         return false;
     }
 
+
+    private boolean isMostlyLatin(String s) {
+        if (s == null) return false;
+
+        int latin = 0;
+        int jpzh = 0;
+
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+
+            if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')) {
+                latin++;
+            }
+
+            if ((c >= 0x3040 && c <= 0x30FF) ||
+                    (c >= 0x3400 && c <= 0x9FFF)) {
+                jpzh++;
+            }
+        }
+
+        return latin >= 3 && latin > jpzh;
+    }
+
     private void translateAndAdd(Rect r, String src, String lang) {
         String cacheKey = lang + ":" + src;
 
@@ -529,18 +557,18 @@ private boolean containsJpOrZh(String s) {
                     String out = ko == null ? src : ko.trim();
                     if (out.length() == 0) out = src;
 
-                    String debugOut = "[번역]\n" + out + "\n[OCR]\n" + src;
+                    String debugOut = out;
 
                     cache.put(cacheKey, debugOut);
                     addTextBox(r, debugOut);
                 })
-                .addOnFailureListener(e -> addTextBox(r, "[OCR]\\n" + src + "\\n[번역실패]\\n" + e.getMessage()));
+                .addOnFailureListener(e -> addTextBox(r, src));
     }
 
     private void addTextBox(Rect r, String text) {
         TextView tv = new TextView(this);
         tv.setText(text);
-        tv.setTextSize(10);
+        tv.setTextSize(12);
         tv.setTextColor(Color.WHITE);
         tv.setBackgroundColor(0xEE000000);
         tv.setPadding(10, 6, 10, 6);
@@ -553,7 +581,7 @@ private boolean containsJpOrZh(String s) {
         if (r.height() > r.width() * 1.5f) {
             boxW = Math.max(130, r.width() + 90);
             boxH = Math.max(90, r.height() + 20);
-            tv.setTextSize(10);
+            tv.setTextSize(12);
         }
 
         FrameLayout.LayoutParams fp = new FrameLayout.LayoutParams(boxW, boxH);
