@@ -144,6 +144,12 @@ public class OverlayOcrService extends Service {
                 PixelFormat.TRANSLUCENT
         );
 
+        
+        lp.flags =
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                | WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+                | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS;
+
         wm.addView(overlay, lp);
         showStatus("번역 모델 준비 중...");
     }
