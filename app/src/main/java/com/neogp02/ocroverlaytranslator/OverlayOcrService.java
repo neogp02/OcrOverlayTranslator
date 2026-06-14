@@ -542,30 +542,13 @@ private boolean containsJpOrZh(String s) {
         return latin >= 3 && latin > jpzh;
     }
 
+    
     private void translateAndAdd(Rect r, String src, String lang) {
-        String cacheKey = lang + ":" + src;
-
-        if (cache.containsKey(cacheKey)) {
-            addTextBox(r, cache.get(cacheKey));
-            return;
-        }
-
-        Translator t = lang.equals("zh") ? zhTranslator : jpTranslator;
-
-        t.translate(src)
-                .addOnSuccessListener(ko -> {
-                    String out = ko == null ? src : ko.trim();
-                    if (out.length() == 0) out = src;
-
-                    String debugOut = out;
-
-                    cache.put(cacheKey, debugOut);
-                    addTextBox(r, debugOut);
-                })
-                .addOnFailureListener(e -> addTextBox(r, src));
+        String out = "[OCR]\n" + src;
+        addTextBox(r, out);
     }
 
-    private void addTextBox(Rect r, String text) {
+private void addTextBox(Rect r, String text) {
         TextView tv = new TextView(this);
         tv.setText(text);
         tv.setTextSize(12);
