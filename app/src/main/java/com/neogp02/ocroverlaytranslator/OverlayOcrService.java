@@ -387,8 +387,9 @@ public class OverlayOcrService extends Service {
     }
 
     
+    
     private void addBottomPanel(String text) {
-        ScrollView scroll = new ScrollView(this);
+        android.widget.ScrollView scroll = new android.widget.ScrollView(this);
         scroll.setBackgroundColor(0xCC000000);
         scroll.setFillViewport(false);
 
@@ -401,9 +402,9 @@ public class OverlayOcrService extends Service {
 
         scroll.addView(
                 tv,
-                new ScrollView.LayoutParams(
-                        ScrollView.LayoutParams.MATCH_PARENT,
-                        ScrollView.LayoutParams.WRAP_CONTENT
+                new android.widget.ScrollView.LayoutParams(
+                        android.widget.ScrollView.LayoutParams.MATCH_PARENT,
+                        android.widget.ScrollView.LayoutParams.WRAP_CONTENT
                 )
         );
 
