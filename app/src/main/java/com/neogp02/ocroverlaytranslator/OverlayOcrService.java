@@ -305,40 +305,46 @@ public class OverlayOcrService extends Service {
     
     
     
+    
     private void handleText(Text result, String lang) {
         if (result == null) return;
 
-        String raw = result.getText();
+        StringBuilder sb = new StringBuilder();
+        sb.append("[ML KIT BLOCK TEST]\n\n");
+
+        int index = 1;
+
+        for (Text.TextBlock block : result.getTextBlocks()) {
+            sb.append("===== BLOCK ");
+            sb.append(index++);
+            sb.append(" =====\n");
+            sb.append(block.getText());
+            sb.append("\n\n");
+        }
 
         overlay.removeAllViews();
         placedBoxes.clear();
 
-        showRawOcrDebug(raw);
-    }
-
-    private void showRawOcrDebug(String raw) {
-        if (raw == null) raw = "";
-
         TextView tv = new TextView(this);
-        tv.setText("[ML KIT RAW OCR]\n" + raw);
+        tv.setText(sb.toString());
         tv.setTextSize(12);
         tv.setTextColor(Color.WHITE);
         tv.setBackgroundColor(0xDD000000);
-        tv.setPadding(12, 8, 12, 8);
-        tv.setMaxLines(35);
+        tv.setPadding(12, 12, 12, 12);
+        tv.setMaxLines(60);
 
         DisplayMetrics dm = getResources().getDisplayMetrics();
 
-        FrameLayout.LayoutParams fp =
+        FrameLayout.LayoutParams lp =
                 new FrameLayout.LayoutParams(
-                        dm.widthPixels - 30,
+                        dm.widthPixels - 20,
                         FrameLayout.LayoutParams.WRAP_CONTENT
                 );
 
-        fp.leftMargin = 15;
-        fp.topMargin = 80;
+        lp.leftMargin = 10;
+        lp.topMargin = 80;
 
-        overlay.addView(tv, fp);
+        overlay.addView(tv, lp);
     }
 
 private String cleanSource(String s) {
