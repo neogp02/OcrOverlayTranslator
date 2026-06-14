@@ -356,7 +356,7 @@ public class OverlayOcrService extends Service {
             translateAndAdd(g.rect, g.text, lang);
 
             count++;
-            if (count >= 4) break;
+            if (count >= 12) break;
         }
     }
 
@@ -516,7 +516,16 @@ private boolean containsJpOrZh(String s) {
         }
 
         int x = Math.max(0, r.left - 6);
-        int y = Math.max(0, r.top - 6);
+
+        // 가능하면 원문 위쪽에 표시.
+        // 위쪽 공간이 부족하면 원문 위치에 표시.
+        int estimatedH = Math.max(70, r.height() + 50);
+        int y;
+        if (r.top - estimatedH - 6 > 0) {
+            y = r.top - estimatedH - 6;
+        } else {
+            y = Math.max(0, r.top - 6);
+        }
 
         if (x + boxW > dm.widthPixels) {
             x = Math.max(0, dm.widthPixels - boxW - 4);
