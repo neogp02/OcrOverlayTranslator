@@ -391,14 +391,16 @@ public class OverlayOcrService extends Service {
         tv.setText(text);
         tv.setTextSize(10);
         tv.setTextColor(Color.WHITE);
-        tv.setBackgroundColor(0xE6000000);
+        tv.setBackgroundColor(0xCC000000);
         tv.setPadding(12, 10, 12, 10);
         tv.setMaxLines(12);
         tv.setSingleLine(false);
 
         DisplayMetrics dm = getResources().getDisplayMetrics();
 
-        int panelHeight = Math.min(360, dm.heightPixels / 3);
+        int panelHeight = Math.min(240, dm.heightPixels / 4);
+
+        int bottomOffset = 200;
 
         FrameLayout.LayoutParams fp =
                 new FrameLayout.LayoutParams(
@@ -407,7 +409,10 @@ public class OverlayOcrService extends Service {
                 );
 
         fp.leftMargin = 0;
-        fp.topMargin = dm.heightPixels - panelHeight;
+        fp.topMargin =
+                dm.heightPixels
+                - panelHeight
+                - bottomOffset;
 
         overlay.addView(tv, fp);
     }
