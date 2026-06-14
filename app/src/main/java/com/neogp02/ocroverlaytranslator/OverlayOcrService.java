@@ -484,6 +484,28 @@ private void showStatus(String msg) {
         return sb.toString();
     }
 
+
+    private String normalizeForTranslate(String s) {
+        if (s == null) return "";
+
+        String t = s;
+
+        // ML Kit OCR 자주 나는 오인식 보정
+        t = t.replace("時距", "時間");
+        t = t.replace("時臣", "時間");
+        t = t.replace("時距が", "時間が");
+
+        // 만화/구어체 보정
+        t = t.replace("アガリ時間", "上がり時間");
+        t = t.replace("あがり時間", "上がり時間");
+        t = t.replace("出待ち?", "出待ち？");
+
+        // 줄바꿈은 번역기에 문장 경계로 전달
+        t = t.replace("\n", "。");
+
+        return t.trim();
+    }
+
     private interface PanelTranslateCallback {
         void onDone(String text);
     }
@@ -494,13 +516,15 @@ private void showStatus(String msg) {
             return;
         }
 
+        String fixedSrc = normalizeForTranslate(src);
+
         try {
             if ("zh".equals(lang) && zhTranslator != null) {
-                zhTranslator.translate(src)
+                zhTranslator.translate(fixedSrc)
                         .addOnSuccessListener(cb::onDone)
                         .addOnFailureListener(e -> cb.onDone(src));
             } else if (jpTranslator != null) {
-                jpTranslator.translate(src)
+                jpTranslator.translate(fixedSrc)
                         .addOnSuccessListener(cb::onDone)
                         .addOnFailureListener(e -> cb.onDone(src));
             } else {
