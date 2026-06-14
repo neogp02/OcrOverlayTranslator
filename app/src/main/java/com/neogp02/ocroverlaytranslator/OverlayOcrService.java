@@ -49,6 +49,9 @@ public class OverlayOcrService extends Service {
     private WindowManager wm;
     private FrameLayout overlay;
     private android.widget.ScrollView bottomPanel;
+    private TextView bottomPanelText;
+    private TextView closeButton;
+    private String lastPanelText = ""; 
     private MediaProjection projection;
     private ImageReader reader;
     private Handler handler;
@@ -398,6 +401,7 @@ panel.append("[")
     
     
     
+    
     private void addBottomPanel(String text) {
         text = text.replace("\\n", "\n");
 
@@ -405,11 +409,16 @@ panel.append("[")
             wm = (WindowManager)getSystemService(WINDOW_SERVICE);
         }
 
-        if (bottomPanel != null) {
-            try {
-                wm.removeView(bottomPanel);
-            } catch (Throwable ignored) {}
-            bottomPanel = null;
+        // 같은 내용이면 갱신하지 않음: 스크롤 위치 유지
+        if (text.equals(lastPanelText) && bottomPanel != null) {
+            return;
+        }
+
+        lastPanelText = text;
+
+        if (bottomPanel != null && bottomPanelText != null) {
+            bottomPanelText.setText(text);
+            return;
         }
 
         bottomPanel = new android.widget.ScrollView(this);
@@ -419,15 +428,15 @@ panel.append("[")
         bottomPanel.setClickable(true);
         bottomPanel.setFocusable(false);
 
-        TextView tv = new TextView(this);
-        tv.setText(text);
-        tv.setTextSize(10);
-        tv.setTextColor(Color.WHITE);
-        tv.setPadding(12, 10, 12, 40);
-        tv.setSingleLine(false);
+        bottomPanelText = new TextView(this);
+        bottomPanelText.setText(text);
+        bottomPanelText.setTextSize(10);
+        bottomPanelText.setTextColor(Color.WHITE);
+        bottomPanelText.setPadding(12, 10, 12, 40);
+        bottomPanelText.setSingleLine(false);
 
         bottomPanel.addView(
-                tv,
+                bottomPanelText,
                 new android.widget.ScrollView.LayoutParams(
                         android.widget.ScrollView.LayoutParams.MATCH_PARENT,
                         android.widget.ScrollView.LayoutParams.WRAP_CONTENT
@@ -454,8 +463,52 @@ panel.append("[")
         lp.y = dm.heightPixels - panelHeight - bottomOffset;
 
         wm.addView(bottomPanel, lp);
+
+        addCloseButton();
     }
 
+
+
+    private void addCloseButton() {
+        if (closeButton != null) return;
+
+        if (wm == null) {
+            wm = (WindowManager)getSystemService(WINDOW_SERVICE);
+        }
+
+        closeButton = new TextView(this);
+        closeButton.setText("×");
+        closeButton.setTextSize(22);
+        closeButton.setTextColor(Color.WHITE);
+        closeButton.setGravity(Gravity.CENTER);
+        closeButton.setBackgroundColor(0xCCAA0000);
+        closeButton.setClickable(true);
+        closeButton.setFocusable(false);
+
+        closeButton.setOnClickListener(v -> {
+            try {
+                stopSelf();
+            } catch (Throwable ignored) {}
+        });
+
+        DisplayMetrics dm = getResources().getDisplayMetrics();
+
+        WindowManager.LayoutParams lp = new WindowManager.LayoutParams(
+                64,
+                64,
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                        | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
+                        | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                PixelFormat.TRANSLUCENT
+        );
+
+        lp.gravity = Gravity.TOP | Gravity.LEFT;
+        lp.x = dm.widthPixels - 80;
+        lp.y = 90;
+
+        wm.addView(closeButton, lp);
+    }
 
     private void translateAndAdd(Rect r, String src, String lang) {
         String out = "[OCR]\n" + src;
@@ -514,6 +567,7 @@ panel.append("[")
             if (handler != null) handler.removeCallbacksAndMessages(null);
             if (overlay != null && wm != null) wm.removeView(overlay);
             if (bottomPanel != null && wm != null) wm.removeView(bottomPanel);
+            if (closeButton != null && wm != null) wm.removeView(closeButton);
             if (projection != null) projection.stop();
 
             if (jpRecognizer != null) jpRecognizer.close();
