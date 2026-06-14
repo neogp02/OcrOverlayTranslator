@@ -387,7 +387,75 @@ private void showStatus(String msg) {
     }
 
 
-    private ArrayList<OcrItem> groupLinesByXYStart(ArrayList<OcrItem> lines) {
+    
+    private ArrayList<OcrItem> groupElementsForBubbles(ArrayList<OcrItem> elems) {
+        ArrayList<ArrayList<OcrItem>> groups = new ArrayList<>();
+
+        ArrayList<OcrItem> sorted = new ArrayList<>(elems);
+
+        sorted.sort((a, b) -> {
+            if (Math.abs(a.rect.top - b.rect.top) > 55) {
+                return Integer.compare(a.rect.top, b.rect.top);
+            }
+            return Integer.compare(b.rect.centerX(), a.rect.centerX());
+        });
+
+        for (OcrItem cur : sorted) {
+            boolean added = false;
+
+            for (ArrayList<OcrItem> g : groups) {
+                Rect gr = rectOfLineGroup(g);
+                Rect test = new Rect(gr);
+                test.union(cur.rect);
+
+                OcrItem anchor = g.get(0);
+
+                int xDist = Math.abs(cur.rect.centerX() - anchor.rect.centerX());
+                int yStartDist = Math.abs(cur.rect.top - anchor.rect.top);
+
+                int yOverlap =
+                        Math.min(cur.rect.bottom, gr.bottom)
+                        - Math.max(cur.rect.top, gr.top);
+
+                int yGap =
+                        Math.max(0,
+                                Math.max(cur.rect.top - gr.bottom,
+                                         gr.top - cur.rect.bottom));
+
+                boolean xClose = xDist <= 92;
+                boolean yStartClose = yStartDist <= 42;
+                boolean yConnected = yOverlap > -35 || yGap <= 65;
+                boolean sizeOk = test.width() <= 165 && test.height() <= 320;
+
+                if (xClose && yStartClose && yConnected && sizeOk) {
+                    g.add(cur);
+                    added = true;
+                    break;
+                }
+            }
+
+            if (!added) {
+                ArrayList<OcrItem> ng = new ArrayList<>();
+                ng.add(cur);
+                groups.add(ng);
+            }
+        }
+
+        ArrayList<OcrItem> out = new ArrayList<>();
+
+        for (ArrayList<OcrItem> g : groups) {
+            Rect r = rectOfLineGroup(g);
+            String text = orderLineGroupText(g);
+
+            if (text.trim().length() > 0) {
+                out.add(new OcrItem(r, text.trim()));
+            }
+        }
+
+        return out;
+    }
+
+private ArrayList<OcrItem> groupLinesByXYStart(ArrayList<OcrItem> lines) {
         ArrayList<ArrayList<OcrItem>> groups = new ArrayList<>();
 
         ArrayList<OcrItem> sorted = new ArrayList<>(lines);
