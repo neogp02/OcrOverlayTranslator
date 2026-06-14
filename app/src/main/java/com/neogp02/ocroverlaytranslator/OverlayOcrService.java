@@ -312,89 +312,77 @@ public class OverlayOcrService extends Service {
     
     
     
+    
     private void handleText(Text result, String lang) {
         if (result == null) return;
 
-        ArrayList<OcrItem> lines = new ArrayList<>();
+        StringBuilder sb = new StringBuilder();
+        sb.append("[ELEMENT DUMP]\n\n");
+
+        int blockIndex = 1;
 
         for (Text.TextBlock block : result.getTextBlocks()) {
+            sb.append("B").append(blockIndex++).append(": ");
+            sb.append(block.getText()).append("\n");
+
+            int lineIndex = 1;
+
             for (Text.Line line : block.getLines()) {
-                Rect r = line.getBoundingBox();
-                String text = cleanSource(line.getText());
+                Rect lr = line.getBoundingBox();
 
-                if (r == null) continue;
-                if (text.length() < 2) continue;
-                if (!containsJpOrZh(text)) continue;
+                sb.append("  L").append(lineIndex++).append(" ");
+                if (lr != null) {
+                    sb.append("box=");
+                    sb.append(lr.left).append(",");
+                    sb.append(lr.top).append(",");
+                    sb.append(lr.right).append(",");
+                    sb.append(lr.bottom).append(" ");
+                }
+                sb.append("text=[").append(line.getText()).append("]\n");
 
-                Rect rr = new Rect(
-                        r.left / 2,
-                        r.top / 2,
-                        r.right / 2,
-                        r.bottom / 2
-                );
+                int elementIndex = 1;
 
-                lines.add(new OcrItem(rr, text));
+                for (Text.Element element : line.getElements()) {
+                    Rect er = element.getBoundingBox();
+
+                    sb.append("    E").append(elementIndex++).append(" ");
+                    if (er != null) {
+                        sb.append("box=");
+                        sb.append(er.left).append(",");
+                        sb.append(er.top).append(",");
+                        sb.append(er.right).append(",");
+                        sb.append(er.bottom).append(" ");
+                    }
+                    sb.append("text=[").append(element.getText()).append("]\n");
+                }
             }
-        }
 
-        ArrayList<OcrItem> merged = mergeVerticalLines(lines);
+            sb.append("\n");
+        }
 
         overlay.removeAllViews();
         placedBoxes.clear();
 
-        int count = 0;
-        for (OcrItem item : merged) {
-            addTextBox(item.rect, item.text);
-            count++;
-            if (count >= 35) break;
-        }
-    }
+        TextView tv = new TextView(this);
+        tv.setText(sb.toString());
+        tv.setTextSize(7);
+        tv.setTextColor(Color.WHITE);
+        tv.setBackgroundColor(0xDD000000);
+        tv.setPadding(8, 8, 8, 8);
+        tv.setMaxLines(160);
 
-    private ArrayList<OcrItem> mergeVerticalLines(ArrayList<OcrItem> lines) {
-        ArrayList<OcrItem> sorted = new ArrayList<>(lines);
+        DisplayMetrics dm = getResources().getDisplayMetrics();
 
-        // 위쪽부터 처리. 같은 높이면 오른쪽부터.
-        sorted.sort((a, b) -> {
-            if (Math.abs(a.rect.top - b.rect.top) > 40) {
-                return Integer.compare(a.rect.top, b.rect.top);
-            }
-            return Integer.compare(b.rect.centerX(), a.rect.centerX());
-        });
+        FrameLayout.LayoutParams lp =
+                new FrameLayout.LayoutParams(
+                        dm.widthPixels - 20,
+                        FrameLayout.LayoutParams.WRAP_CONTENT
+                );
 
-        ArrayList<OcrItem> merged = new ArrayList<>();
+        lp.leftMargin = 10;
+        lp.topMargin = 40;
 
-        for (OcrItem cur : sorted) {
-            boolean added = false;
-
-            for (OcrItem m : merged) {
-                int dx = Math.abs(cur.rect.centerX() - m.rect.centerX());
-                int verticalGap = cur.rect.top - m.rect.bottom;
-
-                boolean sameColumn = dx < 35;
-                boolean below = verticalGap >= -15;
-                boolean closeVertically = verticalGap < 130;
-
-                if (sameColumn && below && closeVertically) {
-                    m.text = m.text + "\n" + cur.text;
-                    m.rect.union(cur.rect);
-                    added = true;
-                    break;
-                }
-            }
-
-            if (!added) {
-                merged.add(new OcrItem(new Rect(cur.rect), cur.text));
-            }
-        }
-
-        merged.sort((a, b) -> {
-            if (Math.abs(a.rect.top - b.rect.top) > 80) {
-                return Integer.compare(a.rect.top, b.rect.top);
-            }
-            return Integer.compare(b.rect.centerX(), a.rect.centerX());
-        });
-
-        return merged;
+        overlay.addView(tv, lp);
     }
 
 private String cleanSource(String s) {
