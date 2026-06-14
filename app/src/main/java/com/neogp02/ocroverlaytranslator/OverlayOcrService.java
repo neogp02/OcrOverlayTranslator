@@ -375,13 +375,14 @@ private void showStatus(String msg) {
     }
 
     
+    
     private ArrayList<OcrItem> groupLinesByXYStart(ArrayList<OcrItem> lines) {
         ArrayList<ArrayList<OcrItem>> groups = new ArrayList<>();
 
         ArrayList<OcrItem> sorted = new ArrayList<>(lines);
 
         sorted.sort((a, b) -> {
-            if (Math.abs(a.rect.top - b.rect.top) > 80) {
+            if (Math.abs(a.rect.top - b.rect.top) > 70) {
                 return Integer.compare(a.rect.top, b.rect.top);
             }
             return Integer.compare(b.rect.centerX(), a.rect.centerX());
@@ -395,42 +396,24 @@ private void showStatus(String msg) {
                 Rect test = new Rect(gr);
                 test.union(cur.rect);
 
+                // 그룹 기준점: 첫 줄의 Y 시작점
+                int anchorTop = g.get(0).rect.top;
+                int anchorCenterX = g.get(0).rect.centerX();
+
+                int xDist = Math.abs(cur.rect.centerX() - anchorCenterX);
+                int yStartDist = Math.abs(cur.rect.top - anchorTop);
+
+                boolean xClose = xDist < 65;
+
+                // 핵심: Y 길이/겹침보다 시작점 우선
+                boolean yStartClose = yStartDist < 28;
+
+                // 너무 큰 말풍선 방지
                 boolean sizeOk =
-                        test.width() < 150 &&
-                        test.height() < 300;
+                        test.width() < 135 &&
+                        test.height() < 260;
 
-                if (!sizeOk) continue;
-
-                boolean pairMatch = false;
-
-                for (OcrItem old : g) {
-                    int xDist = Math.abs(cur.rect.centerX() - old.rect.centerX());
-                    int yStartDist = Math.abs(cur.rect.top - old.rect.top);
-
-                    int yOverlap =
-                            Math.min(cur.rect.bottom, old.rect.bottom)
-                            - Math.max(cur.rect.top, old.rect.top);
-
-                    int yGap =
-                            Math.max(0,
-                                    Math.max(cur.rect.top - old.rect.bottom,
-                                             old.rect.top - cur.rect.bottom));
-
-                    boolean xClose = xDist < 75;
-
-                    // 핵심: 말풍선 안 같은 세로열/인접열은 Y 시작점이 비슷해야 함
-                    boolean yStartClose = yStartDist < 45;
-
-                    // 너무 멀리 떨어진 줄은 같은 말풍선으로 보지 않음
-                    boolean yConnected = yOverlap > -30 || yGap < 55;
-
-                    if (xClose && yStartClose && yConnected) {
-                        pairMatch = true;
-                        break;
-                    }
-                }
-
-                if (pairMatch) {
+                if (xClose && yStartClose && sizeOk) {
                     g.add(cur);
                     added = true;
                     break;
