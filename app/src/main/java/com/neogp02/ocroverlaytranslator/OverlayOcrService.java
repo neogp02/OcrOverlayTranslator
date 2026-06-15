@@ -388,9 +388,9 @@ private void showStatus(String msg) {
 
 
     
+    
     private ArrayList<OcrItem> groupElementsForBubbles(ArrayList<OcrItem> elems) {
         ArrayList<ArrayList<OcrItem>> groups = new ArrayList<>();
-
         ArrayList<OcrItem> sorted = new ArrayList<>(elems);
 
         sorted.sort((a, b) -> {
@@ -408,33 +408,39 @@ private void showStatus(String msg) {
                 Rect test = new Rect(gr);
                 test.union(cur.rect);
 
-                OcrItem anchor = g.get(0);
+                if (test.width() > 150 || test.height() > 330) continue;
 
-                int xDist = Math.abs(cur.rect.centerX() - anchor.rect.centerX());
-                int yStartDist = Math.abs(cur.rect.top - anchor.rect.top);
+                boolean pairMatch = false;
 
-                int yOverlap =
-                        Math.min(cur.rect.bottom, gr.bottom)
-                        - Math.max(cur.rect.top, gr.top);
+                for (OcrItem old : g) {
+                    int xDist = Math.abs(cur.rect.centerX() - old.rect.centerX());
+                    int yStartDist = Math.abs(cur.rect.top - old.rect.top);
 
-                int yGap =
-                        Math.max(0,
-                                Math.max(cur.rect.top - gr.bottom,
-                                         gr.top - cur.rect.bottom));
+                    int yOverlap =
+                            Math.min(cur.rect.bottom, old.rect.bottom)
+                            - Math.max(cur.rect.top, old.rect.top);
 
-                // 핵심: X 중심 차이가 크면 다른 말풍선으로 분리
-                boolean xClose = xDist <= 52;
+                    int yGap =
+                            Math.max(0,
+                                    Math.max(cur.rect.top - old.rect.bottom,
+                                             old.rect.top - cur.rect.bottom));
 
-                // Y 시작점은 보조 기준으로만 사용
-                boolean yStartClose = yStartDist <= 60;
+                    // 인접 세로 컬럼만 같은 말풍선으로 결합
+                    boolean neighborColumn = xDist <= 36;
 
-                // 세로로 너무 멀면 분리
-                boolean yConnected = yOverlap > -35 || yGap <= 65;
+                    // 시작점이 어느 정도 비슷해야 함
+                    boolean yStartClose = yStartDist <= 70;
 
-                // 말풍선 하나로 보기엔 너무 큰 영역 방지
-                boolean sizeOk = test.width() <= 130 && test.height() <= 320;
+                    // 세로로 너무 떨어져 있으면 분리
+                    boolean yConnected = yOverlap > -45 || yGap <= 80;
 
-                if (xClose && yStartClose && yConnected && sizeOk) {
+                    if (neighborColumn && yStartClose && yConnected) {
+                        pairMatch = true;
+                        break;
+                    }
+                }
+
+                if (pairMatch) {
                     g.add(cur);
                     added = true;
                     break;
@@ -457,8 +463,8 @@ private void showStatus(String msg) {
             if (text.trim().length() > 0) {
                 StringBuilder dbg = new StringBuilder();
                 dbg.append(text.trim()).append("\n");
-
                 dbg.append("---- members ----\n");
+
                 for (OcrItem m : g) {
                     dbg.append("L=").append(m.rect.left)
                             .append(" T=").append(m.rect.top)
@@ -477,6 +483,7 @@ private void showStatus(String msg) {
 
         return out;
     }
+
 
 private ArrayList<OcrItem> groupLinesByXYStart(ArrayList<OcrItem> lines) {
         ArrayList<ArrayList<OcrItem>> groups = new ArrayList<>();
