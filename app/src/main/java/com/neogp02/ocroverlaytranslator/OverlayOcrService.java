@@ -374,10 +374,8 @@ private void showStatus(String msg) {
             if (cut >= 0) clean = clean.substring(0, cut).trim();
 
             srcs[i] = clean;
-            trans[i] = "번역 중...";
+            trans[i] = "";
         }
-
-        addBottomPanel(buildPanelText(srcs, trans));
 
         for (int i = 0; i < max; i++) {
             final int idx = i;
@@ -387,7 +385,11 @@ private void showStatus(String msg) {
 
                 // 깜빡임 완화: 마지막 번역 완료 시에만 패널 갱신
                 if (idx == max - 1) {
-                    addBottomPanel(buildPanelText(srcs, trans));
+                    String panelText = buildPanelText(srcs, trans);
+                    if (!panelText.equals(lastPanelText)) {
+                        lastPanelText = panelText;
+                        addBottomPanel(panelText);
+                    }
                 }
             });
         }
