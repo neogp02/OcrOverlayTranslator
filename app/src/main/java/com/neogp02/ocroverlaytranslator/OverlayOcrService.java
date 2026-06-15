@@ -701,64 +701,83 @@ private ArrayList<OcrItem> groupLinesByXYStart(ArrayList<OcrItem> lines) {
         void onDone(String text);
     }
 
+
     private void translateForPanel(String src, String lang, PanelTranslateCallback cb) {
         if (src == null || src.trim().length() == 0) {
             cb.onDone("");
             return;
         }
 
-        String fixedSrc = normalizeForTranslate(src);
+        final String text = src.trim();
 
-        try {
-            if ("zh".equals(lang) && zhTranslator != null) {
-                zhTranslator.translate(fixedSrc)
-                        .addOnSuccessListener(cb::onDone)
-                        .addOnFailureListener(e -> cb.onDone(src));
-            } else if (jpTranslator != null) {
-                jpTranslator.translate(fixedSrc)
-                        .addOnSuccessListener(cb::onDone)
-                        .addOnFailureListener(e -> cb.onDone(src));
-            } else {
-                cb.onDone(src);
+        new Thread(() -> {
+            String result = text;
+
+            try {
+                String sl = "jp".equals(lang) ? "ja" : "zh-CN";
+                String q = java.net.URLEncoder.encode(text, "UTF-8");
+
+                String urlStr =
+                        "https://translate.googleapis.com/translate_a/single"
+                                + "?client=gtx"
+                                + "&sl=" + sl
+                                + "&tl=ko"
+                                + "&dt=t"
+                                + "&q=" + q;
+
+                java.net.URL url = new java.net.URL(urlStr);
+                java.net.HttpURLConnection conn =
+                        (java.net.HttpURLConnection) url.openConnection();
+
+                conn.setRequestMethod("GET");
+                conn.setConnectTimeout(5000);
+                conn.setReadTimeout(5000);
+                conn.setRequestProperty("User-Agent", "Mozilla/5.0");
+
+                java.io.BufferedReader br =
+                        new java.io.BufferedReader(
+                                new java.io.InputStreamReader(conn.getInputStream(), "UTF-8")
+                        );
+
+                StringBuilder sb = new StringBuilder();
+                String line;
+
+                while ((line = br.readLine()) != null) {
+                    sb.append(line);
+                }
+
+                br.close();
+                conn.disconnect();
+
+                org.json.JSONArray arr = new org.json.JSONArray(sb.toString());
+                org.json.JSONArray parts = arr.getJSONArray(0);
+
+                StringBuilder out = new StringBuilder();
+
+                for (int i = 0; i < parts.length(); i++) {
+                    org.json.JSONArray part = parts.getJSONArray(i);
+                    if (!part.isNull(0)) {
+                        out.append(part.getString(0));
+                    }
+                }
+
+                result = out.toString().trim();
+
+            } catch (Throwable e) {
+                result = text;
             }
-        } catch (Throwable t) {
-            cb.onDone(src);
-        }
+
+            final String finalResult = result;
+
+            if (handler != null) {
+                handler.post(() -> cb.onDone(finalResult));
+            } else {
+                cb.onDone(finalResult);
+            }
+        }).start();
     }
 
-private void addNumberMarker(Rect r, int number) {
-        TextView tv = new TextView(this);
-        tv.setText(String.valueOf(number));
-        tv.setTextSize(10);
-        tv.setTextColor(Color.WHITE);
-        tv.setGravity(Gravity.CENTER);
-        tv.setBackgroundColor(0x66000000);
-        tv.setPadding(2, 1, 2, 1);
 
-        int size = 24;
-        int x = Math.max(0, r.left - 6);
-        int y = Math.max(0, r.top - 6);
-
-        DisplayMetrics dm = getResources().getDisplayMetrics();
-
-        if (x + size > dm.widthPixels) x = dm.widthPixels - size;
-        if (y + size > dm.heightPixels) y = dm.heightPixels - size;
-
-        FrameLayout.LayoutParams fp = new FrameLayout.LayoutParams(size, size);
-        fp.leftMargin = x;
-        fp.topMargin = y;
-
-        overlay.addView(tv, fp);
-    }
-
-    
-    
-    
-    
-    
-    
-    
-    
     private void addBottomPanel(String text) {
         text = text.replace("\\n", "\n");
 
