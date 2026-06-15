@@ -329,6 +329,7 @@ private void showStatus(String msg) {
     
     
     
+    
     private void handleText(Text result, String lang) {
         if (result == null) return;
 
@@ -362,33 +363,29 @@ private void showStatus(String msg) {
         overlay.removeAllViews();
         placedBoxes.clear();
 
-        StringBuilder panel = new StringBuilder();
-
         int max = Math.min(groups.size(), 60);
 
-        for (int i = 0; i < max; i++) {
-            OcrItem it = groups.get(i);
+        String[] srcs = new String[max];
+        String[] trans = new String[max];
 
-            panel.append("[")
-                    .append(i + 1)
-                    .append("] ")
-                    .append("L=").append(it.rect.left)
-                    .append(" T=").append(it.rect.top)
-                    .append(" R=").append(it.rect.right)
-                    .append(" B=").append(it.rect.bottom)
-                    .append(" W=").append(it.rect.width())
-                    .append(" H=").append(it.rect.height())
-                    .append("\n")
-                    .append(it.text)
-                    .append("\n\n");
+        for (int i = 0; i < max; i++) {
+            srcs[i] = groups.get(i).text;
+            trans[i] = "번역 중...";
         }
 
-        addBottomPanel(panel.toString());
+        addBottomPanel(buildPanelText(srcs, trans));
+
+        for (int i = 0; i < max; i++) {
+            final int idx = i;
+
+            translateForPanel(srcs[i], lang, translated -> {
+                trans[idx] = translated;
+                addBottomPanel(buildPanelText(srcs, trans));
+            });
+        }
     }
 
 
-    
-    
     private ArrayList<OcrItem> groupElementsForBubbles(ArrayList<OcrItem> elems) {
         ArrayList<ArrayList<OcrItem>> groups = new ArrayList<>();
         ArrayList<OcrItem> sorted = new ArrayList<>(elems);
