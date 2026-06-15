@@ -52,7 +52,8 @@ public class OverlayOcrService extends Service {
     private android.widget.ScrollView bottomPanel;
     private TextView bottomPanelText;
     private TextView closeButton;
-    private String lastPanelText = ""; 
+    private String lastPanelText = "";
+    private String lastSourceKey = ""; 
     private MediaProjection projection;
     private ImageReader reader;
     private Handler handler;
@@ -331,6 +332,7 @@ private void showStatus(String msg) {
     
     
     
+
     private void handleText(Text result, String lang) {
         if (result == null) return;
 
@@ -361,13 +363,13 @@ private void showStatus(String msg) {
             return Integer.compare(b.rect.centerX(), a.rect.centerX());
         });
 
-        overlay.removeAllViews();
-        placedBoxes.clear();
-
         int max = Math.min(groups.size(), 60);
+        if (max <= 0) return;
 
         String[] srcs = new String[max];
         String[] trans = new String[max];
+
+        StringBuilder keyBuilder = new StringBuilder();
 
         for (int i = 0; i < max; i++) {
             String clean = groups.get(i).text;
@@ -376,19 +378,42 @@ private void showStatus(String msg) {
 
             srcs[i] = clean;
             trans[i] = "";
+
+            keyBuilder.append(i).append(":").append(clean).append("\n");
         }
 
-        translateAllForPanel(srcs, lang, translated -> {
-            for (int i = 0; i < max; i++) {
-                trans[i] = translated[i];
-            }
+        String sourceKey = keyBuilder.toString();
 
-            String panelText = buildPanelText(srcs, trans);
-            if (!panelText.equals(lastPanelText)) {
-                lastPanelText = panelText;
-                addBottomPanel(panelText);
-            }
-        });
+        // 같은 페이지/같은 OCR 결과면 재번역하지 않음
+        if (sourceKey.equals(lastSourceKey)) {
+            return;
+        }
+
+        lastSourceKey = sourceKey;
+        lastPanelText = "";
+
+        overlay.removeAllViews();
+        placedBoxes.clear();
+
+        final java.util.concurrent.atomic.AtomicInteger doneCount =
+                new java.util.concurrent.atomic.AtomicInteger(0);
+
+        for (int i = 0; i < max; i++) {
+            final int idx = i;
+
+            translateForPanel(srcs[i], lang, translated -> {
+                trans[idx] = translated;
+
+                if (doneCount.incrementAndGet() >= max) {
+                    String panelText = buildPanelText(srcs, trans);
+
+                    if (!panelText.equals(lastPanelText)) {
+                        lastPanelText = panelText;
+                        addBottomPanel(panelText);
+                    }
+                }
+            });
+        }
     }
 
 
