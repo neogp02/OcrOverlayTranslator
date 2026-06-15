@@ -369,7 +369,11 @@ private void showStatus(String msg) {
         String[] trans = new String[max];
 
         for (int i = 0; i < max; i++) {
-            srcs[i] = groups.get(i).text;
+            String clean = groups.get(i).text;
+            int cut = clean.indexOf("---- members ----");
+            if (cut >= 0) clean = clean.substring(0, cut).trim();
+
+            srcs[i] = clean;
             trans[i] = "번역 중...";
         }
 
@@ -380,7 +384,11 @@ private void showStatus(String msg) {
 
             translateForPanel(srcs[i], lang, translated -> {
                 trans[idx] = translated;
-                addBottomPanel(buildPanelText(srcs, trans));
+
+                // 깜빡임 완화: 마지막 번역 완료 시에만 패널 갱신
+                if (idx == max - 1) {
+                    addBottomPanel(buildPanelText(srcs, trans));
+                }
             });
         }
     }
@@ -458,23 +466,7 @@ private void showStatus(String msg) {
             String text = orderLineGroupText(g);
 
             if (text.trim().length() > 0) {
-                StringBuilder dbg = new StringBuilder();
-                dbg.append(text.trim()).append("\n");
-                dbg.append("---- members ----\n");
-
-                for (OcrItem m : g) {
-                    dbg.append("L=").append(m.rect.left)
-                            .append(" T=").append(m.rect.top)
-                            .append(" R=").append(m.rect.right)
-                            .append(" B=").append(m.rect.bottom)
-                            .append(" W=").append(m.rect.width())
-                            .append(" H=").append(m.rect.height())
-                            .append(" :: ")
-                            .append(m.text)
-                            .append("\n");
-                }
-
-                out.add(new OcrItem(r, dbg.toString().trim()));
+                out.add(new OcrItem(r, text.trim()));
             }
         }
 
