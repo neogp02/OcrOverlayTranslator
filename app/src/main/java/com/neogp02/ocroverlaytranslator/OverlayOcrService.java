@@ -378,24 +378,17 @@ private void showStatus(String msg) {
             trans[i] = "";
         }
 
-        final AtomicInteger doneCount = new AtomicInteger(0);
+        translateAllForPanel(srcs, lang, translated -> {
+            for (int i = 0; i < max; i++) {
+                trans[i] = translated[i];
+            }
 
-        for (int i = 0; i < max; i++) {
-            final int idx = i;
-
-            translateForPanel(srcs[i], lang, translated -> {
-                trans[idx] = translated;
-
-                // 모든 번역 요청이 끝났을 때만 패널 갱신
-                if (doneCount.incrementAndGet() >= max) {
-                    String panelText = buildPanelText(srcs, trans);
-                    if (!panelText.equals(lastPanelText)) {
-                        lastPanelText = panelText;
-                        addBottomPanel(panelText);
-                    }
-                }
-            });
-        }
+            String panelText = buildPanelText(srcs, trans);
+            if (!panelText.equals(lastPanelText)) {
+                lastPanelText = panelText;
+                addBottomPanel(panelText);
+            }
+        });
     }
 
 
