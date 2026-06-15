@@ -688,17 +688,11 @@ private ArrayList<OcrItem> groupLinesByXYStart(ArrayList<OcrItem> lines) {
         String t = s;
 
         // ML Kit OCR 자주 나는 오인식 보정
-        t = t.replace("時距", "時間");
-        t = t.replace("時臣", "時間");
-        t = t.replace("時距が", "時間が");
 
         // 만화/구어체 보정
-        t = t.replace("アガリ時間", "上がり時間");
-        t = t.replace("あがり時間", "上がり時間");
-        t = t.replace("出待ち?", "出待ち？");
 
         // 줄바꿈은 번역기에 문장 경계로 전달
-        t = t.replace("\n", "。");
+        t = t.replace("\n", " ");
 
         return t.trim();
     }
