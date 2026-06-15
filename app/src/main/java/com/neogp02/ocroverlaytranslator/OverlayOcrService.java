@@ -565,7 +565,7 @@ private ArrayList<OcrItem> groupLinesByXYStart(ArrayList<OcrItem> lines) {
 
         sorted.sort((a, b) -> {
             // 세로쓰기: 오른쪽 컬럼 먼저
-            if (Math.abs(a.rect.centerX() - b.rect.centerX()) > 30) {
+            if (Math.abs(a.rect.centerX() - b.rect.centerX()) > 12) {
                 return Integer.compare(b.rect.centerX(), a.rect.centerX());
             }
 
