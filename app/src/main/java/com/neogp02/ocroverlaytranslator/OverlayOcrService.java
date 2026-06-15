@@ -28,6 +28,7 @@ import java.util.Map;
 import java.util.ArrayDeque;
 import java.io.FileOutputStream;
 import java.util.ArrayList;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.List;
 
 public class OverlayOcrService extends Service {
@@ -377,14 +378,16 @@ private void showStatus(String msg) {
             trans[i] = "";
         }
 
+        final AtomicInteger doneCount = new AtomicInteger(0);
+
         for (int i = 0; i < max; i++) {
             final int idx = i;
 
             translateForPanel(srcs[i], lang, translated -> {
                 trans[idx] = translated;
 
-                // 깜빡임 완화: 마지막 번역 완료 시에만 패널 갱신
-                if (idx == max - 1) {
+                // 모든 번역 요청이 끝났을 때만 패널 갱신
+                if (doneCount.incrementAndGet() >= max) {
                     String panelText = buildPanelText(srcs, trans);
                     if (!panelText.equals(lastPanelText)) {
                         lastPanelText = panelText;
